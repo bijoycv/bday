@@ -5,8 +5,8 @@ services:
     command: python manage.py runserver 0.0.0.0:8002
     volumes:
       - .:/app
-    ports:
-      - "8002:8002"
+    expose:
+      - "8002"
     env_file:
       - .env
     environment:
@@ -16,8 +16,11 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
+      - VIRTUAL_HOST=bday.localhost
+      - VIRTUAL_PORT=8002
     networks:
       - proxy_net
+    restart: always
 
 volumes:
   static_volume:
