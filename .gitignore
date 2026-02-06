@@ -1,11 +1,20 @@
-.env
+# Python-generated files
 __pycache__/
-*.pyc
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+venv/
+
+# App artifacts
+.env
 db.sqlite3
 .DS_Store
 .agent/
-venv/
-.venv/
-/static/
-/media/
+static/
+media/
 *.log
