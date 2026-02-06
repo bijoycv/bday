@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Signature | Proceed{% endblock %}
+
+{% block extra_css %}
+{% include 'components/premium_styles.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="glass-card p-5 text-center">
+            <div class="mb-4">
+                <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 4rem;"></i>
+            </div>
+            <h2 class="fw-bold text-white mb-3">Delete Signature?</h2>
+            <p class="text-white text-opacity-75 mb-4">
+                Are you sure you want to delete the signature "<strong>{{ signature.name }}</strong>"? This action
+                cannot be undone.
+            </p>
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="d-flex gap-3 justify-content-center">
+                    <a href="{% url 'signature_list' %}" class="btn btn-outline-light px-4">Cancel</a>
+                    <button type="submit" class="btn btn-danger px-4">Yes, Delete It</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

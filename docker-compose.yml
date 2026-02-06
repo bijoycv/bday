@@ -1,0 +1,28 @@
+services:
+  web:
+    build: .
+    container_name: bday_app
+    command: python manage.py runserver 0.0.0.0:8002
+    volumes:
+      - .:/app
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    environment:
+      - DATABASE=postgres
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+    networks:
+      - proxy_net
+
+volumes:
+  static_volume:
+  media_volume:
+
+networks:
+  proxy_net:
+    external: true

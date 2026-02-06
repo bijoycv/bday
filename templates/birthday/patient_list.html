@@ -1,0 +1,1796 @@
+{% extends 'base.html' %}
+
+{% block extra_css %}
+{% include 'components/premium_styles.html' %}
+{% endblock %}
+
+{% block title %}Patients | Proceed{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">Patient Directory</h2>
+        <p class="text-white-50 small mb-0">Total Patients: <span class="text-primary fw-bold">
+                {{ page_obj.paginator.count }}</span></p>
+        {% if last_active %}
+        <div class="d-flex align-items-center gap-2 mt-1">
+            <span class="text-white-50 small">Last Added or Updated:</span>
+            <a href="{% url 'patient_detail' last_active.pk %}"
+                class="text-white small fw-bold text-decoration-none hover-primary">
+                {{ last_active.first_name }} {{ last_active.last_name }}
+            </a>
+            <span
+                class="badge rounded-pill {% if last_active.patient_type == 'Proceed' %}bg-success{% else %}bg-secondary{% endif %} bg-opacity-50 text-white"
+                style="font-size: 0.6rem; letter-spacing: 0.5px;">{{ last_active.patient_type }}</span>
+            <span class="text-white-50 small opacity-75">on {{ last_active.updated_at|date:"M d, Y" }}</span>
+        </div>
+        {% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-3">
+        <div class="glass-card px-3 py-2 d-none d-md-flex align-items-center gap-2 text-white small shadow-sm"
+            style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.05);">
+            <i class="bi bi-geo-alt-fill text-danger"></i>
+            <span class="text-white-50">California:</span>
+            <span id="california-clock" class="fw-bold font-monospace" style="min-width: 160px;">Loading...</span>
+        </div>
+        <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#smoSyncModal">
+            <i class="bi bi-arrow-repeat"></i> Sync from SMO
+        </button>
+        <a href="{% url 'patient_create' %}" class="btn btn-premium">
+            <i class="bi bi-plus-lg"></i> Add New Patient
+        </a>
+    </div>
+</div>
+
+{% if messages %}
+{% for message in messages %}
+<div class="alert alert-{{ message.tags }} alert-dismissible fade show glass-card border-0 text-white" role="alert"
+    style="background: {% if message.tags == 'success' %}rgba(16, 185, 129, 0.2){% else %}rgba(244, 63, 94, 0.2){% endif %};">
+    {{ message }}
+    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- Sort, Search & Bulk Actions -->
+<div class="glass-card p-3 mb-4">
+    <div class="row align-items-center g-3">
+        <!-- Search & Filter -->
+        <div class="col-lg-8">
+            <form method="get" class="d-flex flex-wrap gap-2" id="search-form">
+                {% if current_sort %}<input type="hidden" name="sort" value="{{ current_sort }}">{% endif %}
+                {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+                {% if plan_filter %}<input type="hidden" name="plan" value="{{ plan_filter }}">{% endif %}
+                {% if patient_type_filter %}<input type="hidden" name="patient_type"
+                    value="{{ patient_type_filter }}">{% endif %}
+
+                <!-- Search box -->
+                <div class="input-group" style="min-width: 250px; flex: 2;">
+                    <span class="input-group-text bg-transparent border-end-0 text-white-50">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" name="q" id="search-input" class="form-control border-start-0 ps-0"
+                        placeholder="Search patients..." value="{{ search_query }}">
+                </div>
+
+
+                <select name="month" id="month_select" class="form-select w-auto" style="min-width: 140px;">
+                    <option value="">All Months</option>
+                    {% for m_num, m_name in months %}
+                    <option value="{{ m_num }}" {% if month_filter|add:"0" == m_num %}selected{% endif %}>{{ m_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <select name="per_page" id="per_page_select" class="form-select w-auto">
+                    <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                    <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                    <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                    <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                </select>
+
+                {% if search_query or month_filter or status_filter or plan_filter or patient_type_filter %}
+                <a href="{% url 'patient_list' %}" class="btn btn-outline-light" title="Clear Filters">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+                {% endif %}
+            </form>
+        </div>
+
+        <!-- Sort & Timeline View Actions -->
+        <div class="col-lg-4 text-end">
+            <div class="d-flex justify-content-end gap-2 align-items-center">
+                <a href="?sort=recent{% if per_page %}&per_page={{ per_page }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}{% if patient_type_filter %}&patient_type={{ patient_type_filter }}{% endif %}"
+                    class="btn btn-sm {% if current_sort == 'recent' or not current_sort %}btn-premium{% else %}btn-outline-light border-opacity-25{% endif %} rounded-pill px-3">
+                    <i class="bi bi-clock-history me-1"></i> Recent Activity
+                </a>
+
+                <a href="?sort=upcoming{% if per_page %}&per_page={{ per_page }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}{% if patient_type_filter %}&patient_type={{ patient_type_filter }}{% endif %}"
+                    class="btn btn-sm {% if current_sort == 'upcoming' %}btn-premium{% else %}btn-outline-light border-opacity-25{% endif %} rounded-pill px-3">
+                    <i class="bi bi-star-fill small me-1"></i> Upcoming
+                </a>
+
+                <button type="submit" form="bulk-delete-form" id="bulk-delete-btn"
+                    class="btn btn-danger btn-sm d-none mb-0"
+                    onclick="return confirm('Are you sure you want to delete selected patients?');">
+                    <i class="bi bi-trash"></i> Delete (<span id="selected-count">0</span>)
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="results-section">
+    <form id="bulk-delete-form" action="{% url 'patient_bulk_delete' %}" method="post">
+        {% csrf_token %}
+        <div class="glass-card p-0 overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-custom mb-0 table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th class="ps-4" style="width: 40px;">
+                                <input type="checkbox" class="form-check-input" id="select-all">
+                            </th>
+                            <th class="ps-2" style="width: 50px;">#</th>
+                            <th>Name</th>
+                            <th>Date of Birth</th>
+                            <th>
+                                <div class="d-flex align-items-center gap-2">
+                                    Type
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-link text-white-50 p-0 text-decoration-none"
+                                            type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                            title="Filter by Patient Type">
+                                            {% if patient_type_filter %}
+                                            <i class="bi bi-funnel-fill text-primary"></i>
+                                            {% else %}
+                                            <i class="bi bi-funnel"></i>
+                                            {% endif %}
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-dark glass-card shadow-lg border-secondary border-opacity-25"
+                                            style="min-width: 180px;">
+                                            <li>
+                                                <h6 class="dropdown-header text-uppercase small opacity-50">Patient Type
+                                                </h6>
+                                            </li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center {% if not patient_type_filter %}active{% endif %}"
+                                                    href="?{% if search_query %}q={{ search_query }}&{% endif %}{% if month_filter %}month={{ month_filter }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}{% if plan_filter %}plan={{ plan_filter }}&{% endif %}patient_type=">
+                                                    All Types
+                                                    {% if not patient_type_filter %}<i class="bi bi-check2"></i>{% endif %}
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <hr class="dropdown-divider border-secondary border-opacity-25">
+                                            </li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center {% if patient_type_filter == 'Regular' %}active{% endif %}"
+                                                    href="?patient_type=Regular{% if search_query %}&q={{ search_query }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}">
+                                                    Regular
+                                                    {% if patient_type_filter == 'Regular' %}<i
+                                                        class="bi bi-check2"></i>{% endif %}
+                                                </a>
+                                            </li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center {% if patient_type_filter == 'Proceed' %}active{% endif %}"
+                                                    href="?patient_type=Proceed{% if search_query %}&q={{ search_query }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}">
+                                                    Proceed
+                                                    {% if patient_type_filter == 'Proceed' %}<i
+                                                        class="bi bi-check2"></i>{% endif %}
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </th>
+                            <th>Contact</th>
+                            <th style="min-width: 140px;">
+                                <div class="d-flex align-items-center gap-2">
+                                    Enrolled
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-link text-white-50 p-0 text-decoration-none"
+                                            type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                            title="Filter by Plan Status">
+                                            {% if status_filter %}
+                                            <i class="bi bi-funnel-fill text-primary"></i>
+                                            {% else %}
+                                            <i class="bi bi-funnel"></i>
+                                            {% endif %}
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-dark glass-card shadow-lg border-secondary border-opacity-25"
+                                            style="min-width: 200px;">
+                                            <li>
+                                                <h6 class="dropdown-header text-uppercase small opacity-50">Filter by
+                                                    Status</h6>
+                                            </li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center {% if not status_filter %}active{% endif %}"
+                                                    href="?{% if search_query %}q={{ search_query }}&{% endif %}{% if month_filter %}month={{ month_filter }}&{% endif %}{% if plan_filter %}plan={{ plan_filter }}&{% endif %}{% if patient_type_filter %}patient_type={{ patient_type_filter }}&{% endif %}status=">
+                                                    All Patients
+                                                    {% if not status_filter %}<i class="bi bi-check2"></i>{% endif %}
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <hr class="dropdown-divider border-secondary border-opacity-25">
+                                            </li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center {% if status_filter == 'proceed_active' %}active{% endif %}"
+                                                    href="?status=proceed_active{% if search_query %}&q={{ search_query }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}{% if patient_type_filter %}&patient_type={{ patient_type_filter }}{% endif %}">
+                                                    Proceed Active
+                                                    {% if status_filter == 'proceed_active' %}<i
+                                                        class="bi bi-check2"></i>{% endif %}
+                                                </a>
+                                            </li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center {% if status_filter == 'proceed_inactive' %}active{% endif %}"
+                                                    href="?status=proceed_inactive{% if search_query %}&q={{ search_query }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}{% if patient_type_filter %}&patient_type={{ patient_type_filter }}{% endif %}">
+                                                    Proceed Inactive
+                                                    {% if status_filter == 'proceed_inactive' %}<i
+                                                        class="bi bi-check2"></i>{% endif %}
+                                                </a>
+                                            </li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center {% if status_filter == 'expiring_soon' %}active{% endif %}"
+                                                    href="?status=expiring_soon{% if search_query %}&q={{ search_query }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}{% if patient_type_filter %}&patient_type={{ patient_type_filter }}{% endif %}">
+                                                    Expiring Soon
+                                                    {% if status_filter == 'expiring_soon' %}<i
+                                                        class="bi bi-check2"></i>{% endif %}
+                                                </a>
+                                            </li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center {% if status_filter == 'not_registered' %}active{% endif %}"
+                                                    href="?status=not_registered{% if search_query %}&q={{ search_query }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}{% if patient_type_filter %}&patient_type={{ patient_type_filter }}{% endif %}">
+                                                    Not Yet Registered
+                                                    {% if status_filter == 'not_registered' %}<i
+                                                        class="bi bi-check2"></i>{% endif %}
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </th>
+                            <th>
+                                <div class="d-flex align-items-center gap-2">
+                                    Plan
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-link text-white-50 p-0 text-decoration-none"
+                                            type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                            title="Filter by Plan">
+                                            {% if plan_filter %}
+                                            <i class="bi bi-funnel-fill text-primary"></i>
+                                            {% else %}
+                                            <i class="bi bi-funnel"></i>
+                                            {% endif %}
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-dark glass-card shadow-lg border-secondary border-opacity-25"
+                                            style="min-width: 180px;">
+                                            <li>
+                                                <h6 class="dropdown-header text-uppercase small opacity-50">Filter by
+                                                    Plan</h6>
+                                            </li>
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center {% if not plan_filter %}active{% endif %}"
+                                                    href="?{% if search_query %}q={{ search_query }}&{% endif %}{% if month_filter %}month={{ month_filter }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}{% if patient_type_filter %}patient_type={{ patient_type_filter }}&{% endif %}plan=">
+                                                    All Plans
+                                                    {% if not plan_filter %}<i class="bi bi-check2"></i>{% endif %}
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <hr class="dropdown-divider border-secondary border-opacity-25">
+                                            </li>
+                                            {% for plan in available_plans %}
+                                            <li><a class="dropdown-item d-flex justify-content-between align-items-center {% if plan_filter == plan %}active{% endif %}"
+                                                    href="?plan={{ plan }}{% if search_query %}&q={{ search_query }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if patient_type_filter %}&patient_type={{ patient_type_filter }}{% endif %}">
+                                                    {{ plan }}
+                                                    {% if plan_filter == plan %}<i class="bi bi-check2"></i>{% endif %}
+                                                </a>
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </th>
+                            <th>Verified</th>
+                            <th style="width: 150px;">Timeline</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for patient in patients %}
+                        <tr>
+                            <td class="ps-4">
+                                <input type="checkbox" name="selected_patients" value="{{ patient.pk }}"
+                                    class="form-check-input patient-checkbox">
+                            </td>
+                            <td class="ps-2 text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar-circle shadow-sm">
+                                        {{ patient.first_name|slice:":1" }}
+                                        {{ patient.last_name|slice:":1" }}
+                                    </div>
+                                    <div>
+                                        <div class="fw-normal fs-6 d-flex align-items-center gap-2">
+                                            <a href="{% url 'patient_detail' pk=patient.pk %}"
+                                                class="text-white text-decoration-none hover-primary">
+                                                {{ patient.first_name }} {{ patient.middle_name|default:"" }}
+                                                {{ patient.last_name }}
+                                            </a>
+                                            {% if patient.created_at.date == today %}
+                                            <span class="badge bg-primary bg-opacity-75"
+                                                style="font-size: 0.55rem;">NEW</span>
+                                            {% endif %}
+                                        </div>
+                                        <small class="text-white-50">
+                                            Added: {{ patient.created_at|date:"M d, Y" }}</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="text-white-50 fw-medium">{{ patient.dob|date:"M d, Y" }}</span>
+                            </td>
+                            <td>
+                                <span
+                                    class="badge rounded-pill {% if patient.patient_type == 'Proceed' %}bg-success{% else %}bg-secondary{% endif %} bg-opacity-75">
+                                    {{ patient.patient_type }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <span class="mb-1 text-white"><i class="bi bi-envelope me-2 text-primary"></i>
+                                        {{ patient.email }}</span>
+                                    <small class="text-white-50"><i class="bi bi-telephone me-2 text-primary"></i>
+                                        {{ patient.phone }}</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column" style="min-width: 120px;">
+                                    <span class="text-white small mb-1">
+                                        {{ patient.enrollment_date|date:"M d, Y"|default:"-" }}</span>
+                                    {% if patient.enrollment_date %}
+                                    <div class="progress" style="height: 4px; background-color: rgba(255,255,255,0.1);"
+                                        title="{% if patient.plan_progress.is_expired %}Expired{% else %}{{ patient.plan_progress.days_left }} days left{% endif %}">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-{{ patient.plan_progress.status }}"
+                                            role="progressbar" style="width: {{ patient.plan_progress.percentage }}%"
+                                            aria-valuenow="{{ patient.plan_progress.percentage }}" aria-valuemin="0"
+                                            aria-valuemax="100"></div>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1 text-{{ patient.plan_progress.status }}"
+                                        style="font-size: 0.72rem; font-weight: 500;">
+                                        <span>{{ patient.plan_progress.label }}</span>
+                                        <span class="text-white-50">
+                                            {{ patient.plan_progress.expiry_date|date:"M d, Y" }}</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if patient.membership_plan %}
+                                {% if patient.membership_plan == 'Gold' %}
+                                <span class="badge rounded-pill badge-gold fw-bold px-3 py-2">Gold</span>
+                                {% elif patient.membership_plan == 'Silver' %}
+                                <span class="badge rounded-pill badge-silver fw-bold px-3 py-2">Silver</span>
+                                {% elif patient.membership_plan == 'Bronze' %}
+                                <span class="badge rounded-pill badge-bronze fw-bold px-3 py-2">Bronze</span>
+                                {% else %}
+                                <span class="badge rounded-pill bg-gradient-primary fw-normal px-3 py-2">
+                                    {{ patient.membership_plan }}</span>
+                                {% endif %}
+                                {% else %}
+                                <span class="text-white-50">No Plan</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="form-check form-switch">
+                                    <input {% if patient.is_verified %}checked{% endif %}
+                                        class="form-check-input verify-toggle" type="checkbox" role="switch"
+                                        data-patient-id="{{ patient.pk }}" style="cursor: pointer;">
+                                    <label class="form-check-label small text-white-50">
+                                        {% if patient.is_verified %}Yes{% else %}No{% endif %}
+                                    </label>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="dropdown">
+                                    <button
+                                        class="btn btn-sm btn-outline-secondary border-0 dropdown-toggle text-white-50 small d-flex align-items-center"
+                                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="bi bi-clock-history me-1"></i>
+                                        {% if patient.activities.all %}
+                                        {{ patient.activities.all.0.activity_type }}
+                                        {% else %}
+                                        No status
+                                        {% endif %}
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-dark glass-card border-secondary border-opacity-25 shadow-lg"
+                                        style="min-width: 250px; max-height: 300px; overflow-y: auto;">
+                                        <li class="px-3 py-2 border-bottom border-secondary border-opacity-25">
+                                            <h6 class="mb-0 small fw-bold text-primary">Patient Timeline</h6>
+                                        </li>
+                                        {% for activity in patient.activities.all %}
+                                        <li class="px-3 py-2 border-bottom border-secondary border-opacity-10">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <span class="badge bg-primary bg-opacity-25 text-primary x-small"
+                                                    style="font-size: 0.65rem;">
+                                                    {{ activity.activity_type }}
+                                                </span>
+                                                <small class="text-white-50" style="font-size: 0.65rem;">
+                                                    {{ activity.created_at|date:"M d, Y, H:i" }}
+                                                </small>
+                                            </div>
+                                            <p class="mb-0 x-small text-white opacity-75"
+                                                style="font-size: 0.75rem; white-space: normal;">
+                                                {{ activity.description|default:"" }}
+                                            </p>
+                                        </li>
+                                        {% empty %}
+                                        <li class="px-3 py-3 text-center">
+                                            <small class="text-muted italic">Patient added on
+                                                {{ patient.created_at|date:"M d, Y" }}</small>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </td>
+                            <td class="text-end pe-4">
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button type="button" class="btn btn-icon btn-soft-success send-msg-btn"
+                                        title="Send Message" data-bs-toggle="modal" data-bs-target="#sendMessageModal"
+                                        data-patient-id="{{ patient.pk }}"
+                                        data-patient-name="{{ patient.first_name }} {{ patient.last_name }}"
+                                        data-patient-email="{{ patient.email }}"
+                                        data-patient-phone="{{ patient.phone }}"
+                                        data-patient-type="{{ patient.patient_type }}"
+                                        data-is-expired="{{ patient.plan_progress.is_expired|yesno:'true,false' }}">
+                                        <i class="bi bi-send-fill"></i>
+                                    </button>
+                                    <a href="{% url 'patient_detail' pk=patient.pk %}"
+                                        class="btn btn-icon btn-soft-info" title="View Details">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{% url 'patient_update' pk=patient.pk %}"
+                                        class="btn btn-icon btn-soft-warning" title="Edit">
+                                        <i class="bi bi-pencil-fill"></i>
+                                    </a>
+                                    <a href="{% url 'patient_delete' pk=patient.pk %}"
+                                        class="btn btn-icon btn-soft-danger" title="Delete">
+                                        <i class="bi bi-trash-fill"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-5 text-muted">
+                                <div class="mb-3" style="font-size: 3rem;">📂</div>
+                                No patients found. Click "Add New Patient" to get started.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </form>
+
+    {% if page_obj.has_other_pages %}
+    <div class="d-flex flex-column align-items-center mt-4">
+        <div class="text-white-50 small mb-3">
+            Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} results
+        </div>
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link"
+                        href="?page=1{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}{% if patient_type_filter %}&patient_type={{ patient_type_filter }}{% endif %}"
+                        title="First Page">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-double-left"></i></span>
+                </li>
+                {% endif %}
+
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link"
+                        href="?page={{ page_obj.previous_page_number }}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}{% if patient_type_filter %}&patient_type={{ patient_type_filter }}{% endif %}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for i in page_obj.paginator.page_range %}
+                {% if page_obj.number == i %}
+                <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                {% elif i > page_obj.number|add:'-3' and i < page_obj.number|add:'3' %} <li class="page-item">
+                    <a class="page-link"
+                        href="?page={{ i }}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}{% if patient_type_filter %}&patient_type={{ patient_type_filter }}{% endif %}">
+                        {{ i }}</a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link"
+                            href="?page={{ page_obj.next_page_number }}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}{% if patient_type_filter %}&patient_type={{ patient_type_filter }}{% endif %}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link"
+                            href="?page={{ page_obj.paginator.num_pages }}{% if current_sort %}&sort={{ current_sort }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}{% if month_filter %}&month={{ month_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if plan_filter %}&plan={{ plan_filter }}{% endif %}{% if patient_type_filter %}&patient_type={{ patient_type_filter }}{% endif %}"
+                            title="Last Page">
+                            <i class="bi bi-chevron-double-right"></i>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link"><i class="bi bi-chevron-double-right"></i></span>
+                    </li>
+                    {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div> <!-- End #results-section -->
+<style>
+    .glass-page-link {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
+        color: var(--text-muted);
+    }
+
+    .glass-page-link:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+
+    .page-item.active .premium-active {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        border-color: transparent;
+        color: white;
+    }
+
+    .page-item.disabled .glass-page-link {
+        background: transparent;
+        color: rgba(255, 255, 255, 0.2);
+    }
+
+    .copy-btn-hover {
+        transition: all 0.2s ease;
+        opacity: 0.6;
+    }
+
+    .copy-btn-hover:hover {
+        opacity: 1;
+        transform: scale(1.2);
+        color: var(--bs-primary) !important;
+    }
+</style>
+
+
+<!-- Send Message Modal -->
+<div class="modal fade" id="sendMessageModal" tabindex="-1" aria-labelledby="sendMessageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content bg-dark border border-secondary border-opacity-25"
+            style="background: var(--sidebar-bg); backdrop-filter: blur(12px);">
+            <div class="modal-header border-bottom border-secondary border-opacity-25">
+                <h5 class="modal-title fw-bold" id="sendMessageModalLabel">
+                    <i class="bi bi-send me-2 text-primary"></i> Send Message
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'quick_send_message' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <!-- Patient Info (Read-only) -->
+                    <div class="glass-card p-3 mb-4" style="background: rgba(99, 102, 241, 0.1);">
+                        <div class="d-flex align-items-center">
+                            <div class="avatar-circle me-3" id="modal-patient-avatar"
+                                style="width: 50px; height: 50px;"></div>
+                            <div>
+                                <h5 class="mb-0 fw-bold" id="modal-patient-name">Patient Name</h5>
+                                <small class="text-muted" id="modal-patient-contact">email / phone</small>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" name="patient_id" id="modal-patient-id">
+
+                    <!-- Message Type -->
+                    <div class="mb-3">
+                        <label class="form-label text-white-50 small">Message Type</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="message_type" id="type-email" value="Email"
+                                checked>
+                            <label class="btn btn-outline-primary" for="type-email"><i class="bi bi-envelope me-1"></i>
+                                Email</label>
+
+                            <input type="radio" class="btn-check" name="message_type" id="type-sms" value="SMS">
+                            <label class="btn btn-outline-info" for="type-sms"><i class="bi bi-chat-dots me-1"></i>
+                                SMS</label>
+                        </div>
+                    </div>
+
+                    <!-- Template Selection -->
+                    <div class="mb-3">
+                        <label class="form-label text-white-50 small">Select Template</label>
+                        <select name="template_id" class="form-select" id="modal-template-select">
+                            <option value="">-- Select a template or write custom --</option>
+                            {% for template in templates %}
+                            <option value="{{ template.pk }}">
+                                {{ template.name }} ({{ template.type }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Target Recipient -->
+                    <div class="mb-3">
+                        <label class="form-label text-white-50 small" id="modal-to-label">To (Email)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark border-secondary border-opacity-25 text-white-50"
+                                style="width: 45px; justify-content: center;">
+                                <i class="bi bi-envelope" id="modal-to-icon"></i>
+                            </span>
+                            <input type="text" name="to_recipient" class="form-control bg-dark" id="modal-to-display"
+                                readonly>
+                            <button class="btn btn-outline-secondary border-secondary border-opacity-25 text-white-50"
+                                type="button" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top"
+                                data-bs-content="Copied!"
+                                onclick="copyToClipboard(document.getElementById('modal-to-display').value, this)">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- CC/BCC for Email (Moved above subject) -->
+                    <div id="email-options-group">
+                        <div class="row g-3">
+                            <div class="col-md-6 mb-3">
+                                <label
+                                    class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
+                                    <span>
+                                        CC Recipients
+                                        <button type="button"
+                                            class="btn btn-link p-0 ms-2 text-white-50 text-decoration-none"
+                                            data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top"
+                                            data-bs-content="Copied!" onclick="copyGroup('cc_recipients', this)">
+                                            <i class="bi bi-clipboard"></i>
+                                        </button>
+                                    </span>
+                                    <a href="{% url 'recipient_list' %}" class="text-primary small" target="_blank"><i
+                                            class="bi bi-gear"></i> Manage</a>
+                                </label>
+                                {% if saved_cc %}
+                                <div class="glass-card p-2" style="max-height: 120px; overflow-y: auto;">
+                                    {% for cc in saved_cc %}
+                                    <div class="form-check">
+                                        <input {% if cc.is_default %}checked{% endif %} class="form-check-input"
+                                            type="checkbox" name="cc_recipients" value="{{ cc.email }}"
+                                            id="cc_{{ cc.pk }}">
+                                        <label class="form-check-label small text-white" for="cc_{{ cc.pk }}">
+                                            {{ cc.name }} <span class="text-muted">({{ cc.email }})</span>
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <div class="small text-muted">No saved CC recipients.</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label
+                                    class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
+                                    <span>
+                                        BCC Recipients
+                                        <button type="button"
+                                            class="btn btn-link p-0 ms-2 text-white-50 text-decoration-none"
+                                            data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top"
+                                            data-bs-content="Copied!" onclick="copyGroup('bcc_recipients', this)">
+                                            <i class="bi bi-clipboard"></i>
+                                        </button>
+                                    </span>
+                                </label>
+                                {% if saved_bcc %}
+                                <div class="glass-card p-2" style="max-height: 120px; overflow-y: auto;">
+                                    {% for bcc in saved_bcc %}
+                                    <div class="form-check">
+                                        <input {% if bcc.is_default %}checked{% endif %} class="form-check-input"
+                                            type="checkbox" name="bcc_recipients" value="{{ bcc.email }}"
+                                            id="bcc_{{ bcc.pk }}">
+                                        <label class="form-check-label small text-white" for="bcc_{{ bcc.pk }}">
+                                            {{ bcc.name }} <span class="text-muted">({{ bcc.email }})</span>
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <div class="small text-muted">No saved BCC recipients.</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Email Subject -->
+                    <div class="mb-3" id="email-subject-group">
+                        <label
+                            class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
+                            <span>
+                                Subject
+                                <button type="button" class="btn btn-link p-0 text-white-50 text-decoration-none"
+                                    data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top"
+                                    data-bs-content="Copied!"
+                                    onclick="copyToClipboard(document.getElementById('modal-subject').value, this)">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </span>
+
+                        </label>
+                        <input type="text" name="subject" class="form-control" id="modal-subject"
+                            placeholder="Happy Birthday!">
+                    </div>
+
+                    <!-- Message Body -->
+                    <div class="mb-3">
+                        <label
+                            class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
+                            <span>Message Body
+                                <button type="button" class="btn btn-link p-0 text-white-50 text-decoration-none"
+                                    data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top"
+                                    data-bs-content="Copied!" onclick="copyQuillBody(this)">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </span>
+
+                        </label>
+                        <!-- Quill Editor for Message Body -->
+                        <div id="quill-editor-container" class="bg-dark text-white border-secondary border-opacity-25"
+                            style="height: 150px; border-radius: 0.375rem;"></div>
+                        <textarea name="body" id="modal-body" style="display:none;"></textarea>
+                    </div>
+
+                    <!-- Signature Selection -->
+                    <div class="mb-3" id="email-signature-group">
+                        <label
+                            class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
+                            <span>
+                                Signature
+                                <button type="button" class="btn btn-link p-0 ms-2 text-white-50 text-decoration-none"
+                                    data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top"
+                                    data-bs-content="Copied!" onclick="copyQuillSignature(this)">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </span>
+                            <a href="{% url 'signature_list' %}" class="text-primary small" target="_blank">
+                                <i class="bi bi-gear"></i> Manage
+                            </a>
+                        </label>
+                        <select name="signature_id" class="form-select" id="modal-signature-select">
+                            <option value="" data-content="">-- No Signature --</option>
+                            {% for sig in signatures %}
+                            <option {% if sig.is_default %}selected{% endif %} value="{{ sig.pk }}"
+                                data-content="{{ sig.content|default:'' }}">
+                                {{ sig.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+
+                        <!-- Quill Editor for Signature -->
+                        <div id="quill-signature-container"
+                            class="mt-2 bg-dark text-white border-secondary border-opacity-25"
+                            style="height: 150px; border-radius: 0.375rem;"></div>
+                        <textarea name="custom_signature_content" id="modal-signature-content"
+                            style="display:none;"></textarea>
+                    </div>
+
+                    <!-- Schedule Toggle -->
+                    <div class="mb-3 p-3 rounded"
+                        style="background: rgba(15, 23, 42, 0.4); border: 1px dashed rgba(255,255,255,0.1);">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="schedule-toggle" name="schedule_now"
+                                role="switch">
+                            <label class="form-check-label text-white d-flex align-items-center gap-2"
+                                for="schedule-toggle">
+                                <i class="bi bi-calendar-event text-warning"></i>
+                                Schedule Message
+                            </label>
+                        </div>
+                        <div id="schedule-options"
+                            class="d-none mt-3 border-top border-secondary border-opacity-25 pt-3">
+                            <label class="form-label text-white-50 small">Schedule Time (CA Time)</label>
+                            <input type="time" name="schedule_time"
+                                class="form-control bg-dark text-white border-secondary border-opacity-25"
+                                value="06:00">
+                            <div class="form-text text-white-50 ms-0 ps-0 mt-1">
+                                Message will be sent on the patient's next birthday at this time (PST).
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer border-top border-secondary border-opacity-25">
+                    <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-send-message">
+                        <i class="bi bi-send me-2"></i> Send Now
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- SMO Sync Modal -->
+<div class="modal fade" id="smoSyncModal" tabindex="-1" aria-labelledby="smoSyncModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-dark border border-secondary border-opacity-25"
+            style="background: var(--sidebar-bg); backdrop-filter: blur(12px);">
+            <div class="modal-header border-bottom border-secondary border-opacity-25">
+                <h5 class="modal-title fw-bold" id="smoSyncModalLabel">
+                    <i class="bi bi-arrow-repeat me-2 text-info"></i> SMO Dental Sync Integration
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info bg-info bg-opacity-10 border-info border-opacity-25 text-info small mb-4">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    Sync patients from your SMO Dental Hub account. First, sync the practices to see the available
+                    offices.
+                </div>
+
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+                    <div class="flex-grow-1">
+                        <label class="text-uppercase text-white-50 fw-bold small mb-2 d-block">Client ID</label>
+                        <div class="input-group input-group-sm" style="max-width: 250px;">
+                            <span class="input-group-text bg-dark border-secondary border-opacity-25 text-white-50">
+                                <i class="bi bi-person-badge"></i>
+                            </span>
+                            <input type="text" id="smo_client_id_input"
+                                class="form-control bg-dark border-secondary border-opacity-25 text-white"
+                                placeholder="Enter Client ID" value="1">
+                        </div>
+                    </div>
+                    <div class="text-end align-self-end">
+                        <button type="button" id="btn-sync-practices" class="btn btn-sm btn-outline-info">
+                            <i class="bi bi-arrow-clockwise"></i> Sync Practices List
+                        </button>
+                    </div>
+                </div>
+
+                <h6 class="text-uppercase text-white-50 fw-bold small mb-3">Available Practices</h6>
+
+                <div id="smo-practices-container">
+                    <div class="glass-card p-0 overflow-hidden mb-4">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover align-middle mb-0 small">
+                                <thead class="bg-white bg-opacity-5">
+                                    <tr>
+                                        <th class="ps-3">Practice Name</th>
+                                        <th>Location</th>
+                                        <th>Last Sync</th>
+                                        <th class="text-end pe-3">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for practice in practices %}
+                                    <tr id="practice-row-{{ practice.pk }}">
+                                        <td class="ps-3 fw-bold">{{ practice.name }}</td>
+                                        <td>{{ practice.location|default:"-" }}</td>
+                                        <td class="text-white-50">
+                                            {{ practice.last_sync|date:"M d, H:i"|default:"Never" }}
+                                        </td>
+                                        <td class="text-end pe-3">
+                                            <div class="btn-group">
+                                                <button type="button"
+                                                    class="btn btn-sm btn-info py-0 btn-preview-patients"
+                                                    data-practice-id="{{ practice.pk }}"
+                                                    data-practice-name="{{ practice.name }}">
+                                                    Preview & Sync
+                                                </button>
+                                                <a href="{% url 'delete_practice' practice.pk %}"
+                                                    class="btn btn-sm btn-outline-danger py-0 ms-1"
+                                                    onclick="return confirm('Remove this practice configuration?')">
+                                                    <i class="bi bi-trash"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="4" class="text-center py-4 text-white-50">
+                                            No practices found. Click "Sync Practices List" above to fetch them from
+                                            SMO.
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="smo-patient-preview" class="d-none animate__animated animate__fadeIn">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="text-uppercase text-info fw-bold small mb-0">
+                            <i class="bi bi-person-check me-2"></i> Syncing: <span id="preview-practice-name"></span>
+                        </h6>
+                        <div class="d-flex align-items-center gap-3">
+                            <button type="button" class="btn btn-sm btn-outline-warning py-0" id="btn-show-new-only">
+                                <i class="bi bi-funnel"></i> Match & Show New Only
+                            </button>
+                            <button type="button" class="btn btn-sm btn-link text-white-50 p-0 text-decoration-none"
+                                id="btn-back-to-practices">
+                                <i class="bi bi-chevron-left"></i> Change Practice
+                            </button>
+                        </div>
+                    </div>
+                    <div class="glass-card p-0"
+                        style="max-height: 350px; overflow-y: auto; overflow-x: hidden; border: 1px solid rgba(255,255,255,0.1);">
+                        <table class="table table-dark table-hover align-middle mb-0 small" id="preview-table">
+                            <thead class="bg-white bg-opacity-5 sticky-top">
+                                <tr>
+                                    <th class="ps-3" style="width: 40px;">
+                                        <input type="checkbox" class="form-check-input" id="preview-select-all" checked>
+                                    </th>
+                                    <th>Patient Name</th>
+                                    <th>DOB</th>
+                                    <th>Gender</th>
+                                    <th>Email / Phone</th>
+                                </tr>
+                            </thead>
+                            <tbody id="preview-body">
+                                <!-- Loaded via AJAX -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-3 d-flex justify-content-between align-items-center">
+                        <span class="text-white-50 small"><span id="preview-count">0</span> patients selected</span>
+                        <button type="button" id="btn-confirm-bulk-sync" class="btn btn-primary px-4">
+                            <i class="bi bi-cloud-download me-2"></i> Import Selected
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top border-secondary border-opacity-25">
+                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const scheduleToggle = document.getElementById('schedule-toggle');
+        const sendBtn = document.getElementById('btn-send-message');
+        const scheduleOptions = document.getElementById('schedule-options');
+
+        if (scheduleToggle && sendBtn) {
+            scheduleToggle.addEventListener('change', function () {
+                if (this.checked) {
+                    sendBtn.innerHTML = '<i class="bi bi-clock-history me-2"></i> Schedule';
+                    sendBtn.classList.remove('btn-primary');
+                    sendBtn.classList.add('btn-warning');
+                    if (scheduleOptions) scheduleOptions.classList.remove('d-none');
+                } else {
+                    sendBtn.innerHTML = '<i class="bi bi-send me-2"></i> Send Now';
+                    sendBtn.classList.remove('btn-warning');
+                    sendBtn.classList.add('btn-primary');
+                    if (scheduleOptions) scheduleOptions.classList.add('d-none');
+                }
+            });
+        }
+
+        // --- SMO Patient Preview & Selective Sync ---
+        const practicesContainer = document.getElementById('smo-practices-container');
+        const previewContainer = document.getElementById('smo-patient-preview');
+        const previewBody = document.getElementById('preview-body');
+        const previewPracticeName = document.getElementById('preview-practice-name');
+        const previewCount = document.getElementById('preview-count');
+        const selectAllPreview = document.getElementById('preview-select-all');
+        const filterNewBtn = document.getElementById('btn-show-new-only');
+        const backBtn = document.getElementById('btn-back-to-practices');
+
+        let currentSyncPracticeId = null;
+        let fetchedPatients = [];
+        let hideExistingActive = false;
+
+        function togglePreview(show) {
+            if (show) {
+                practicesContainer.classList.add('d-none');
+                previewContainer.classList.remove('d-none');
+            } else {
+                previewContainer.classList.add('d-none');
+                practicesContainer.classList.remove('d-none');
+                previewBody.innerHTML = '';
+                fetchedPatients = [];
+                hideExistingActive = false;
+                if (filterNewBtn) {
+                    filterNewBtn.classList.replace('btn-warning', 'btn-outline-warning');
+                    filterNewBtn.innerHTML = '<i class="bi bi-funnel"></i> Match & Show New Only';
+                }
+            }
+        }
+
+        function updateSelectedCount() {
+            const checked = document.querySelectorAll('.preview-item-checkbox:checked');
+            previewCount.textContent = checked.length;
+            if (selectAllPreview) {
+                const totalVisible = document.querySelectorAll('.preview-item-checkbox').length;
+                selectAllPreview.checked = totalVisible > 0 && checked.length === totalVisible;
+            }
+        }
+
+        function renderPreview(patients, hideExisting = false) {
+            console.log("Rendering SMO Preview. HideExisting:", hideExisting);
+            let filtered = patients;
+            if (hideExisting) {
+                filtered = patients.filter(p => !p.exists);
+            }
+
+            if (filtered.length === 0) {
+                previewBody.innerHTML = `<tr><td colspan="5" class="text-center py-5 text-white-50">
+                    <i class="bi bi-info-circle d-block mb-2 fs-4"></i>
+                    ${hideExisting ? 'All patients in this list already exist in your directory.' : 'No patients found for this practice.'}
+                </td></tr>`;
+                previewCount.textContent = '0';
+                return;
+            }
+
+            previewBody.innerHTML = filtered.map((p) => {
+                const globalIdx = patients.indexOf(p);
+                const dob = p.dob || p.date_of_birth || p.birth_date || p.birthdate || '-';
+                const gender = p.gender || p.sex || '-';
+                const phone = p.phone || p.mobile || p.phone_number || p.cell_phone || 'no phone';
+                const email = p.email || p.email_address || 'no email';
+                const fullName = (p.first_name || '') + ' ' + (p.last_name || '');
+                const exists = p.exists === true;
+                const plan = p.plan || '';
+                const type = p.type || '';
+
+                let badgeHtml = '';
+                if (exists) {
+                    if (plan) {
+                        const planClass = plan.toLowerCase();
+                        badgeHtml += `<span class="badge badge-${planClass} x-small ms-2" style="font-size: 0.6rem;">${plan}</span>`;
+                    }
+                    if (type === 'Proceed') {
+                        badgeHtml += `<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 x-small ms-1" style="font-size: 0.6rem;">Proceed</span>`;
+                    }
+                }
+
+                return `
+                    <tr class="${exists ? 'opacity-75' : 'animate__animated animate__fadeIn'}">
+                        <td class="ps-3">
+                            <input type="checkbox" class="form-check-input preview-item-checkbox shadow-none" 
+                                   data-index="${globalIdx}" ${exists ? '' : 'checked'}>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="fw-bold ${exists ? 'text-white-50' : 'text-white'}">${fullName}</div>
+                                ${badgeHtml}
+                            </div>
+                            ${exists ? '<div class="text-success x-small mt-1" style="font-size: 0.7rem;"><i class="bi bi-check2-circle"></i> Match found in directory</div>' : ''}
+                        </td>
+                        <td class="text-white-50">${dob}</td>
+                        <td><span class="badge bg-secondary bg-opacity-25 text-white-50 small" style="font-weight: 500;">${gender}</span></td>
+                        <td class="text-white-50 small">
+                            <div class="d-flex flex-column">
+                                <span><i class="bi bi-envelope-at me-1 opacity-50"></i>${email}</span>
+                                <span><i class="bi bi-telephone me-1 opacity-50"></i>${phone}</span>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            updateSelectedCount();
+
+            // Re-attach listeners to new checkboxes
+            document.querySelectorAll('.preview-item-checkbox').forEach(cb => {
+                cb.addEventListener('change', updateSelectedCount);
+            });
+        }
+
+        document.querySelectorAll('.btn-preview-patients').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const practiceId = this.dataset.practiceId;
+                const practiceName = this.dataset.practiceName;
+                currentSyncPracticeId = practiceId;
+                previewPracticeName.textContent = practiceName;
+
+                previewBody.innerHTML = `<tr><td colspan="5" class="text-center py-5">
+                    <div class="spinner-border text-info" role="status"></div>
+                    <div class="mt-2 text-white-50">Fetching patient list from SMO...</div>
+                </td></tr>`;
+                togglePreview(true);
+
+                fetch(`/sync/patients/${practiceId}/preview/`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            fetchedPatients = data.patients;
+                            renderPreview(fetchedPatients, false);
+                        } else {
+                            const msg = data.message || 'Unknown error occurred.';
+                            previewBody.innerHTML = `
+                                <tr>
+                                    <td colspan="5" class="text-center py-5">
+                                        <div class="p-4 rounded-3 border border-danger border-opacity-25" style="background: rgba(220, 53, 69, 0.05);">
+                                            <i class="bi bi-exclamation-octagon text-danger fs-3 d-block mb-3"></i>
+                                            <h6 class="text-white fw-bold mb-2">Fetch Failed</h6>
+                                            <p class="text-white-50 small mb-3 mx-auto" style="max-width: 400px;">${msg}</p>
+                                            <button type="button" class="btn btn-sm btn-outline-danger px-3" onclick="document.querySelector('.btn-preview-patients[data-practice-id=\\'${practiceId}\\']').click()">
+                                                <i class="bi bi-arrow-clockwise me-1"></i> Retry Connection
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>`;
+                        }
+                    })
+                    .catch(err => {
+                        console.error("SMO Preview Error:", err);
+                        previewBody.innerHTML = `
+                            <tr>
+                                <td colspan="5" class="text-center py-5">
+                                    <div class="p-4 rounded-3 border border-danger border-opacity-25" style="background: rgba(220, 53, 69, 0.05);">
+                                        <i class="bi bi-wifi-off text-danger fs-3 d-block mb-3"></i>
+                                        <h6 class="text-white fw-bold mb-2">Connection Lost</h6>
+                                        <p class="text-white-50 small mb-3">Please check your internet connection or try again.</p>
+                                        <button type="button" class="btn btn-sm btn-outline-danger px-3" onclick="document.querySelector('.btn-preview-patients[data-practice-id=\\'${practiceId}\\']').click()">
+                                            <i class="bi bi-arrow-clockwise me-1"></i> Try Again
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>`;
+                    });
+            });
+        });
+
+        if (filterNewBtn) {
+            filterNewBtn.addEventListener('click', function () {
+                hideExistingActive = !hideExistingActive;
+                if (hideExistingActive) {
+                    this.classList.replace('btn-outline-warning', 'btn-warning');
+                    this.innerHTML = '<i class="bi bi-funnel-fill"></i> Showing New Only';
+                    renderPreview(fetchedPatients, true);
+                } else {
+                    this.classList.replace('btn-warning', 'btn-outline-warning');
+                    this.innerHTML = '<i class="bi bi-funnel"></i> Match & Show New Only';
+                    renderPreview(fetchedPatients, false);
+                }
+            });
+        }
+
+        if (selectAllPreview) {
+            selectAllPreview.addEventListener('change', function () {
+                document.querySelectorAll('.preview-item-checkbox').forEach(cb => cb.checked = this.checked);
+                updateSelectedCount();
+            });
+        }
+
+        if (backBtn) {
+            backBtn.addEventListener('click', () => togglePreview(false));
+        }
+
+        const confirmSyncBtn = document.getElementById('btn-confirm-bulk-sync');
+        if (confirmSyncBtn) {
+            confirmSyncBtn.addEventListener('click', function () {
+                const selectedCheckboxes = document.querySelectorAll('.preview-item-checkbox:checked');
+                if (selectedCheckboxes.length === 0) {
+                    alert('Please select at least one patient to sync.');
+                    return;
+                }
+
+                const selectedData = Array.from(selectedCheckboxes).map(cb => fetchedPatients[parseInt(cb.dataset.index)]);
+
+                this.disabled = true;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Syncing...';
+
+                fetch('/sync/patients/bulk-sync/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({
+                        practice_id: currentSyncPracticeId,
+                        patients: selectedData
+                    })
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            // Inject stats
+                            document.getElementById('sync-summary-stats').textContent = data.message;
+
+                            // Inject Updated Patients
+                            const updatedList = document.getElementById('updated-patients-list');
+                            const updatedBadge = document.getElementById('updated-count-badge');
+                            updatedBadge.textContent = data.updated_patients.length;
+                            if (data.updated_patients.length > 0) {
+                                updatedList.innerHTML = data.updated_patients.map(p => `
+                                    <li class="list-group-item bg-transparent text-white border-secondary border-opacity-10 py-2 d-flex align-items-center justify-content-between">
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-arrow-repeat text-warning fs-5 me-2"></i>
+                                            <span>${p.name}</span>
+                                        </div>
+                                        <a href="/patients/${p.id}/" class="btn btn-sm btn-link text-info p-0" title="View Patient">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </a>
+                                    </li>
+                                `).join('');
+                            } else {
+                                updatedList.innerHTML = '<li class="list-group-item bg-transparent text-white-50 text-center py-4 italic">No existing records were updated.</li>';
+                            }
+
+                            // Inject Created Patients
+                            const createdList = document.getElementById('created-patients-list');
+                            const createdBadge = document.getElementById('created-count-badge');
+                            createdBadge.textContent = data.created_patients.length;
+                            if (data.created_patients.length > 0) {
+                                createdList.innerHTML = data.created_patients.map(p => `
+                                    <li class="list-group-item bg-transparent text-white border-secondary border-opacity-10 py-2 d-flex align-items-center justify-content-between">
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-person-plus-fill text-success fs-5 me-2"></i>
+                                            <span class="fw-bold">${p.name}</span>
+                                        </div>
+                                        <a href="/patients/${p.id}/" class="btn btn-sm btn-link text-info p-0" title="View Patient">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </a>
+                                    </li>
+                                `).join('');
+                            } else {
+                                createdList.innerHTML = '<li class="list-group-item bg-transparent text-white-50 text-center py-4 italic">No new records were created.</li>';
+                            }
+
+                            // Show results modal
+                            const resultsModal = new bootstrap.Modal(document.getElementById('syncResultsModal'));
+                            resultsModal.show();
+                        } else {
+                            alert('Error: ' + data.message);
+                            this.disabled = false;
+                            this.innerHTML = '<i class="bi bi-cloud-download me-2"></i> Import Selected';
+                        }
+                    })
+                    .catch(err => {
+                        alert('Sync failed. Please try again.');
+                        this.disabled = false;
+                        this.innerHTML = '<i class="bi bi-cloud-download me-2"></i> Import Selected';
+                    });
+            });
+        }
+
+        // SMO Sync Dynamic Client ID
+        const syncPracticesBtn = document.getElementById('btn-sync-practices');
+        const clientIdInput = document.getElementById('smo_client_id_input');
+        if (syncPracticesBtn && clientIdInput) {
+            syncPracticesBtn.addEventListener('click', function () {
+                const clientId = clientIdInput.value.trim() || '1';
+                window.location.href = `{% url 'sync_practices' %}?client_id=${clientId}`;
+            });
+        }
+    });
+</script>
+
+<!-- Sync Results Modal -->
+<div class="modal fade" id="syncResultsModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static"
+    data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content glass-card border-secondary border-opacity-25 bg-dark"
+            style="background: #11141d !important;">
+            <div class="modal-header border-secondary border-opacity-25 bg-white bg-opacity-5">
+                <h5 class="modal-title text-white">
+                    <i class="bi bi-check-circle-fill text-success me-2"></i> Sync Completed Successfully
+                </h5>
+                <button type="button" class="btn-close btn-close-white" onclick="window.location.reload();"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="sync-summary-stats"
+                    class="alert alert-success bg-success bg-opacity-10 border-success border-opacity-25 text-success mb-4">
+                    <!-- Stats will be injected here -->
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge bg-warning bg-opacity-10 text-warning p-2 me-2">
+                                <i class="bi bi-person-check-fill"></i>
+                            </span>
+                            <h6 class="mb-0 text-white">Updated Patients <span id="updated-count-badge"
+                                    class="badge bg-secondary ms-2 small">0</span></h6>
+                        </div>
+                        <div class="glass-card p-0 border border-secondary border-opacity-10"
+                            style="max-height: 400px; overflow-y: scroll; scrollbar-width: thin; background: rgba(255,255,255,0.02);">
+                            <ul id="updated-patients-list" class="list-group list-group-flush bg-transparent small">
+                                <li class="list-group-item bg-transparent text-white-50 text-center py-4 italic">No
+                                    existing records were updated.</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge bg-success bg-opacity-10 text-success p-2 me-2">
+                                <i class="bi bi-person-plus-fill"></i>
+                            </span>
+                            <h6 class="mb-0 text-white">Newly Created <span id="created-count-badge"
+                                    class="badge bg-secondary ms-2 small">0</span></h6>
+                        </div>
+                        <div class="glass-card p-0 border border-secondary border-opacity-10"
+                            style="max-height: 400px; overflow-y: scroll; scrollbar-width: thin; background: rgba(255,255,255,0.02);">
+                            <ul id="created-patients-list" class="list-group list-group-flush bg-transparent small">
+                                <li class="list-group-item bg-transparent text-white-50 text-center py-4 italic">No new
+                                    records were created.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary border-opacity-25 bg-white bg-opacity-5">
+                <button type="button" class="btn btn-primary px-4 fw-bold" onclick="window.location.reload();">Done,
+                    Return to Directory</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // --- 1. Bulk Select Logic ---
+        function attachListeners() {
+            const selectAll = document.getElementById('select-all');
+            const checkboxes = document.querySelectorAll('input[name="selected_patients"]');
+            const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+            const selectedCountSpan = document.getElementById('selected-count');
+
+            function toggleBulkDeleteButton() {
+                const checked = document.querySelectorAll('input[name="selected_patients"]:checked');
+                if (checked.length > 0) {
+                    bulkDeleteBtn.classList.remove('d-none');
+                    selectedCountSpan.textContent = checked.length;
+                } else {
+                    bulkDeleteBtn.classList.add('d-none');
+                }
+            }
+
+            if (selectAll) {
+                selectAll.addEventListener('change', function () {
+                    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+                    toggleBulkDeleteButton();
+                });
+            }
+
+            checkboxes.forEach(cb => {
+                cb.addEventListener('change', toggleBulkDeleteButton);
+            });
+        }
+
+
+        attachListeners(); // Initial run
+
+        // --- 1.5. Verified Toggle Logic ---
+        function attachVerifyListeners() {
+            const verifyToggles = document.querySelectorAll('.verify-toggle');
+            verifyToggles.forEach(toggle => {
+                // Remove existing listeners to avoid duplicates if re-attached
+                // (Though replaceWith clone is cleaner, simplified here for context)
+                toggle.addEventListener('change', function () {
+                    const patientId = this.dataset.patientId;
+                    const label = this.nextElementSibling;
+                    const originalState = !this.checked; // State before click
+
+                    fetch(`/patients/${patientId}/toggle-verification/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token }}',
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                label.textContent = data.is_verified ? 'Yes' : 'No';
+                                // Optional: Show toast or feedback
+                            } else {
+                                // Revert
+                                this.checked = originalState;
+                                alert('Failed to update status');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            this.checked = originalState;
+                        });
+                });
+            });
+        }
+        attachVerifyListeners();
+
+        // Global variables for Modal Logic
+        let currentPatientFirstName = '';
+        let currentPatientLastName = '';
+        let currentPatientEmail = '';
+        let currentPatientPhone = '';
+        let currentPatientType = '';
+        let currentIsExpired = false;
+
+        // --- 2. Live Search Logic ---
+        const searchInput = document.getElementById('search-input');
+        const perPageSelect = document.getElementById('per_page_select');
+        const resultsSection = document.getElementById('results-section');
+        const form = document.getElementById('search-form');
+
+        let debounceTimer;
+
+        function fetchResults() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const formData = new FormData(form);
+                const params = new URLSearchParams(formData);
+                const url = `${window.location.pathname}?${params.toString()}`;
+
+                // Update URL history without reload
+                window.history.pushState({}, '', url);
+
+                fetch(url)
+                    .then(response => response.text())
+                    .then(html => {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        const newResults = doc.getElementById('results-section').innerHTML;
+                        if (resultsSection && newResults) {
+                            resultsSection.innerHTML = newResults;
+                            attachListeners();
+                            attachVerifyListeners(); // Re-attach verify listeners to new DOM elements
+                        }
+                    })
+                    .catch(err => console.error('Error fetching search results:', err));
+            }, 300); // 300ms delay
+        }
+
+        if (searchInput) {
+            searchInput.addEventListener('input', fetchResults);
+        }
+
+        if (perPageSelect) {
+            perPageSelect.addEventListener('change', fetchResults);
+        }
+
+        const monthSelect = document.getElementById('month_select');
+        if (monthSelect) {
+            monthSelect.addEventListener('change', fetchResults);
+        }
+
+
+        // Initial update of 'To' field
+        updateToField();
+
+        // Initialize Quill (Global for access)
+        window.quill = new Quill('#quill-editor-container', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    ['bold', 'italic', 'underline'],
+                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                    [{ 'color': [] }, { 'background': [] }],
+                    ['clean']
+                ]
+            }
+        });
+
+        // Sync Quill with Hidden Textarea
+        window.quill.on('text-change', function () {
+            document.getElementById('modal-body').value = window.quill.root.innerHTML;
+        });
+
+        // Helper to copy Rich Text (HTML) + Plain Text
+        function copyRichText(html, text, btn) {
+            try {
+                const blobHtml = new Blob([html], { type: 'text/html' });
+                const blobText = new Blob([text], { type: 'text/plain' });
+                const data = [new ClipboardItem({
+                    ["text/html"]: blobHtml,
+                    ["text/plain"]: blobText
+                })];
+                navigator.clipboard.write(data).then(() => {
+                    showPopover(btn);
+                }).catch(err => {
+                    console.error('Rich copy failed, falling back to basic:', err);
+                    copyToClipboard(text, btn);
+                });
+            } catch (e) {
+                console.warn('ClipboardItem not supported or error:', e);
+                copyToClipboard(text, btn);
+            }
+        }
+
+        // Handle "Copy" button for Body (Rich Text)
+        window.copyQuillBody = function (btn) {
+            if (window.quill) {
+                const html = window.quill.root.innerHTML;
+                const text = window.quill.getText();
+                copyRichText(html, text, btn);
+            } else {
+                // Fallback
+                copyToClipboard(document.getElementById('modal-body').value, btn);
+            }
+        }
+
+        // Also Update Quill when Template is selected or manually set
+        window.updateQuillContent = function (htmlContent) {
+            if (window.quill) {
+                const delta = window.quill.clipboard.convert(htmlContent);
+                window.quill.setContents(delta, 'silent');
+                document.getElementById('modal-body').value = htmlContent;
+            }
+        }
+
+        // Initialize Signature Quill
+        window.quillSignature = new Quill('#quill-signature-container', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    ['bold', 'italic', 'underline'],
+                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                    [{ 'color': [] }, { 'background': [] }],
+                    ['clean']
+                ]
+            }
+        });
+
+        window.quillSignature.on('text-change', function () {
+            document.getElementById('modal-signature-content').value = window.quillSignature.root.innerHTML;
+        });
+
+        // Helper to update signature quill
+        function updateQuillSignature(htmlContent) {
+            if (window.quillSignature) {
+                const delta = window.quillSignature.clipboard.convert(htmlContent);
+                window.quillSignature.setContents(delta, 'silent');
+                document.getElementById('modal-signature-content').value = htmlContent;
+            }
+        }
+
+        // --- 3. Send Message Modal Logic ---
+        const sendMessageModal = document.getElementById('sendMessageModal');
+
+        function tryAutoSelectTemplate() {
+            const templateSelect = document.getElementById('modal-template-select');
+            const isEmail = document.getElementById('type-email').checked;
+            const suffix = isEmail ? 'Email' : 'Msg';
+
+            let targetTemplateName = "";
+            if (currentPatientType === 'Regular' || currentIsExpired) {
+                targetTemplateName = "B'Day - Regular - " + suffix;
+            } else if (currentPatientType === 'Proceed' && !currentIsExpired) {
+                targetTemplateName = "B'Day - Proceed - " + suffix;
+            }
+
+            let foundSpecific = false;
+            if (targetTemplateName && templateSelect) {
+                for (let i = 0; i < templateSelect.options.length; i++) {
+                    if (templateSelect.options[i].text.includes(targetTemplateName)) {
+                        templateSelect.selectedIndex = i;
+                        foundSpecific = true;
+                        break;
+                    }
+                }
+            }
+
+            if (foundSpecific) {
+                templateSelect.dispatchEvent(new Event('change'));
+            } else if (templateSelect) {
+                templateSelect.value = '';
+                document.getElementById('modal-subject').value = '';
+                if (typeof updateQuillContent === 'function') {
+                    updateQuillContent('');
+                } else {
+                    document.getElementById('modal-body').value = '';
+                }
+                const signatureSelect = document.getElementById('modal-signature-select');
+                if (signatureSelect) {
+                    signatureSelect.value = '';
+                    updateQuillSignature('');
+                }
+            }
+        }
+
+        if (sendMessageModal) {
+            sendMessageModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const patientId = button.getAttribute('data-patient-id');
+                const patientName = button.getAttribute('data-patient-name');
+                const patientEmail = button.getAttribute('data-patient-email');
+                const patientPhone = button.getAttribute('data-patient-phone');
+
+                // Update globals
+                currentPatientType = button.getAttribute('data-patient-type');
+                currentIsExpired = button.getAttribute('data-is-expired') === 'true';
+                currentPatientEmail = patientEmail || '';
+                currentPatientPhone = patientPhone || '';
+
+                // Store patient names for placeholder replacement
+                const nameParts = patientName.split(' ');
+                currentPatientFirstName = nameParts[0] || '';
+                currentPatientLastName = nameParts.slice(1).join(' ') || '';
+
+                // Populate modal fields
+                document.getElementById('modal-patient-id').value = patientId;
+                document.getElementById('modal-patient-name').textContent = patientName;
+                document.getElementById('modal-patient-contact').textContent = (patientEmail || 'No Email') + ' | ' + (patientPhone || 'No Phone');
+
+                // Reset to Email default on open
+                document.getElementById('type-email').checked = true;
+                const emailSubjectGroup = document.getElementById('email-subject-group');
+                const emailOptionsGroup = document.getElementById('email-options-group');
+                const emailSignatureGroup = document.getElementById('email-signature-group');
+                if (emailSubjectGroup) emailSubjectGroup.style.display = 'block';
+                if (emailOptionsGroup) emailOptionsGroup.style.display = 'block';
+                if (emailSignatureGroup) emailSignatureGroup.style.display = 'block';
+
+                // Initial update of 'To' field
+                updateToField();
+
+                // Avatar initials
+                const initials = nameParts.length > 1
+                    ? nameParts[0][0] + nameParts[nameParts.length - 1][0]
+                    : (nameParts[0] ? nameParts[0][0] : '?');
+                document.getElementById('modal-patient-avatar').textContent = initials.toUpperCase();
+
+                // Run auto-select logic
+                tryAutoSelectTemplate();
+            });
+        }
+
+        // Toggle Email/SMS specific fields
+        const typeRadios = document.querySelectorAll('input[name="message_type"]');
+        const emailSubjectGroup = document.getElementById('email-subject-group');
+        const emailOptionsGroup = document.getElementById('email-options-group');
+        const emailSignatureGroup = document.getElementById('email-signature-group');
+        const signatureSelect = document.getElementById('modal-signature-select');
+
+        function updateToField() {
+            const isEmail = document.getElementById('type-email').checked;
+            const toLabel = document.getElementById('modal-to-label');
+            const toIcon = document.getElementById('modal-to-icon');
+            const toDisplay = document.getElementById('modal-to-display');
+
+            if (isEmail) {
+                if (toLabel) toLabel.textContent = 'To (Email)';
+                if (toIcon) toIcon.className = 'bi bi-envelope';
+                if (toDisplay) toDisplay.value = currentPatientEmail || 'No Email Address';
+            } else {
+                if (toLabel) toLabel.textContent = 'To (Phone)';
+                if (toIcon) toIcon.className = 'bi bi-chat-dots';
+                if (toDisplay) toDisplay.value = currentPatientPhone || 'No Phone Number';
+            }
+        }
+
+        typeRadios.forEach(radio => {
+            radio.addEventListener('change', function () {
+                updateToField();
+                if (this.value === 'SMS') {
+                    if (emailSubjectGroup) emailSubjectGroup.style.display = 'none';
+                    if (emailOptionsGroup) emailOptionsGroup.style.display = 'none';
+                    if (emailSignatureGroup) emailSignatureGroup.style.display = 'none';
+                } else {
+                    if (emailSubjectGroup) emailSubjectGroup.style.display = 'block';
+                    if (emailOptionsGroup) emailOptionsGroup.style.display = 'block';
+                    if (emailSignatureGroup) emailSignatureGroup.style.display = 'block';
+                }
+                // Trigger auto-select when type changes
+                tryAutoSelectTemplate();
+            });
+        });
+
+        // Template Data Map (Safe from HTML attribute breakage)
+        const templateData = {};
+        {% for template in templates %}
+        templateData["{{ template.pk }}"] = {
+            "subject": "{{ template.subject|escapejs }}",
+            "body": "{{ template.body|escapejs }}",
+            "signatureId": "{{ template.signature_id|default:'' }}"
+        };
+        {% endfor %}
+
+        // Template Selection Auto-Fill with Placeholder Replacement
+        const templateSelect = document.getElementById('modal-template-select');
+        if (templateSelect) {
+            templateSelect.addEventListener('change', function () {
+                const templateId = this.value;
+
+                // Save to local storage for automatic loading next time
+                if (templateId) {
+                    localStorage.setItem('last_selected_template_id', templateId);
+                }
+
+                let subject = '';
+                let body = '';
+                let signatureId = '';
+
+                if (templateId && templateData[templateId]) {
+                    const data = templateData[templateId];
+                    subject = data.subject || '';
+                    body = data.body || '';
+                    signatureId = data.signatureId || '';
+                }
+
+                // Replace placeholders with actual patient data
+                subject = subject.replace(/{first_name}/g, currentPatientFirstName);
+                subject = subject.replace(/{last_name}/g, currentPatientLastName);
+                body = body.replace(/{first_name}/g, currentPatientFirstName);
+                body = body.replace(/{last_name}/g, currentPatientLastName);
+
+                document.getElementById('modal-subject').value = subject;
+
+                if (typeof updateQuillContent === 'function') {
+                    updateQuillContent(body);
+                } else {
+                    // Fallback if Quill missing
+                    document.getElementById('modal-body').value = body;
+                }
+
+                // Sync signature dropdown if template has a default
+                if (signatureId && signatureSelect) {
+                    signatureSelect.value = signatureId;
+                    // Trigger change to update preview
+                    signatureSelect.dispatchEvent(new Event('change'));
+                }
+            });
+        }
+
+        if (signatureSelect) {
+            signatureSelect.addEventListener('change', function () {
+                const selectedOption = this.options[this.selectedIndex];
+                const content = selectedOption.getAttribute('data-content') || '';
+                updateQuillSignature(content);
+            });
+
+            // Initial check on load
+            if (signatureSelect.value) {
+                signatureSelect.dispatchEvent(new Event('change'));
+            }
+        }
+        // Copy Utils
+        window.copyToClipboard = function (text, btn) {
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+                showPopover(btn);
+            }).catch(err => console.error('Failed to copy', err));
+        }
+
+        window.copyGroup = function (name, btn) {
+            const checked = Array.from(document.querySelectorAll(`input[name="${name}"]:checked`))
+                .map(cb => cb.value);
+            if (checked.length > 0) {
+                copyToClipboard(checked.join(', '), btn);
+            } else {
+                // Should we show nothing or error? For now, nothing as per request "copied show popover"
+            }
+        }
+
+        window.copyQuillSignature = function (btn) {
+            if (window.quillSignature) {
+                const html = window.quillSignature.root.innerHTML;
+                const text = window.quillSignature.getText();
+                copyRichText(html, text, btn);
+            }
+        }
+
+        function showPopover(btn) {
+            // Initialize popover if not already
+            let popover = bootstrap.Popover.getInstance(btn);
+            if (!popover) {
+                popover = new bootstrap.Popover(btn, {
+                    trigger: 'manual'
+                });
+            }
+            popover.show();
+            setTimeout(() => {
+                popover.hide();
+            }, 1000);
+        }
+    });
+</script>
+{% endblock %}

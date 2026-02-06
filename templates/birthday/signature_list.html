@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block title %}Email Signatures | Proceed{% endblock %}
+
+{% block extra_css %}
+{% include 'components/premium_styles.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">Email Signatures</h2>
+        <p class="text-muted small">Manage reusable HTML signatures for your templates.</p>
+    </div>
+    <a href="{% url 'signature_create' %}" class="btn btn-premium">
+        <i class="bi bi-plus-lg"></i> Add New Signature
+    </a>
+</div>
+
+{% if messages %}
+{% for message in messages %}
+<div class="alert alert-{{ message.tags }} alert-dismissible fade show glass-card border-0 text-white" role="alert"
+    style="background: {% if message.tags == 'success' %}rgba(16, 185, 129, 0.2){% else %}rgba(244, 63, 94, 0.2){% endif %};">
+    {{ message }}
+    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="glass-card overflow-hidden">
+    <div class="table-responsive">
+        <table class="table table-custom table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th class="ps-4">Name</th>
+                    <th>Content Preview</th>
+                    <th>Default</th>
+                    <th class="text-end pe-4">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for signature in signatures %}
+                <tr>
+                    <td class="ps-4">
+                        <span class="text-white fw-medium">{{ signature.name }}</span>
+                    </td>
+                    <td>
+                        <div class="text-white-50 small"
+                            style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            {{ signature.content|striptags }}
+                        </div>
+                    </td>
+                    <td>
+                        {% if signature.is_default %}
+                        <span
+                            class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25 px-2">
+                            <i class="bi bi-check2-circle me-1"></i> Default
+                        </span>
+                        {% else %}
+                        <span class="text-muted small">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end pe-4">
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'signature_update' pk=signature.pk %}" class="btn btn-icon btn-soft-warning"
+                                title="Edit">
+                                <i class="bi bi-pencil-fill"></i>
+                            </a>
+                            <a href="{% url 'signature_delete' pk=signature.pk %}" class="btn btn-icon btn-soft-danger"
+                                title="Delete">
+                                <i class="bi bi-trash-fill"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center py-5 text-muted">
+                        No email signatures found. <a href="{% url 'signature_create' %}" class="text-primary">Create
+                            one</a> to get started.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

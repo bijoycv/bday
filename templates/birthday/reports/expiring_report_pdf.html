@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    <style>
+        @page {
+            margin: 2cm;
+            size: A4;
+
+            @bottom-right {
+                content: "Page " counter(page);
+                font-size: 9pt;
+                color: #666;
+            }
+        }
+
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+            line-height: 1.6;
+            font-size: 10pt;
+        }
+
+        .header {
+            border-bottom: 2px solid #f59e0b;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }
+
+        .brand {
+            font-size: 24pt;
+            font-weight: bold;
+            color: #f59e0b;
+        }
+
+        .report-title {
+            font-size: 18pt;
+            color: #1e293b;
+            margin-top: 5px;
+        }
+
+        .period {
+            font-size: 10pt;
+            color: #64748b;
+        }
+
+        .stats-grid {
+            margin-bottom: 40px;
+        }
+
+        .stat-box {
+            display: inline-block;
+            width: 46%;
+            text-align: center;
+            padding: 15px;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-right: 2%;
+        }
+
+        .stat-val {
+            font-size: 22pt;
+            font-weight: bold;
+            color: #1e293b;
+            margin-bottom: 5px;
+        }
+
+        .stat-lab {
+            font-size: 8pt;
+            text-transform: uppercase;
+            color: #64748b;
+            letter-spacing: 1px;
+        }
+
+        h3 {
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 5px;
+            color: #1e293b;
+            margin-top: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th {
+            background-color: #f1f5f9;
+            text-align: left;
+            padding: 10px;
+            border-bottom: 2px solid #e2e8f0;
+            font-size: 9pt;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 9pt;
+        }
+
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 8pt;
+            color: #94a3b8;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .warning {
+            color: #f59e0b;
+        }
+
+        .danger {
+            color: #ef4444;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="brand">Proceed</div>
+        <div class="report-title">{{ title }}</div>
+        <div class="period">Generated on: {% now "F j, Y, g:i a" %} | Expiration Range: {{ start_date|date:"M d, Y" }} - {{ end_date|date:"M d, Y" }}</div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-box">
+            <div class="stat-lab">Total Expiring</div>
+            <div class="stat-val warning">{{ total_expiring }}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-lab">Report Coverage</div>
+            <div class="stat-val" style="font-size: 14pt; padding-top: 10px;">{{ period|capfirst }}</div>
+        </div>
+    </div>
+
+    <h3>{% if period == 'weekly' %}Next Week's Expiration List{% else %}Monthly Expiration List{% endif %}</h3>
+    <table>
+        <thead>
+            <tr>
+                <th class="text-center" style="width: 25px;">#</th>
+                <th>Patient Name</th>
+                <th style="width: 120px;">Enrollment Date</th>
+                <th style="width: 120px;">Expiration Date</th>
+                <th class="text-center" style="width: 60px;">Plan</th>
+                <th class="text-center" style="width: 70px;">Days Left</th>
+                <th class="text-center" style="width: 70px;">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for patient in patients %}
+            <tr>
+                <td class="text-center" style="color: #64748b; font-size: 8pt;">{{ forloop.counter }}</td>
+                <td><strong>{{ patient.first_name }} {{ patient.last_name }}</strong></td>
+                <td>{{ patient.enrollment_date|date:"M d, Y" }}</td>
+                <td><strong>{{ patient.expiry_date|date:"M d, Y" }}</strong></td>
+                <td class="text-center">
+                    {% if patient.membership_plan %}{{ patient.membership_plan }}{% else %}-{% endif %}
+                </td>
+                <td class="text-center {% if patient.days_until_expiry < 7 %}danger{% endif %}">
+                    {{ patient.days_until_expiry }} Days
+                </td>
+                <td class="text-center">
+                    {% if patient.status_label == 'Expiring' %}
+                    <span class="warning">Expiring</span>
+                    {% elif patient.status_label == 'Expired' %}
+                    <span class="danger">Expired</span>
+                    {% else %}
+                    <span>{{ patient.status_label }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-center">No plans set to expire during this period.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        &copy; 2026 Proceed App. This is an automated report generated by the system.
+    </div>
+</body>
+
+</html>

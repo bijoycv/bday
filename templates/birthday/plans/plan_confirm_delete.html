@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Plan - Proceed Dental{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card bg-dark border-danger">
+                <div class="card-header border-danger bg-danger bg-opacity-10">
+                    <h5 class="mb-0 text-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Delete Plan
+                    </h5>
+                </div>
+                <div class="card-body text-center py-4">
+                    <i class="bi bi-gem text-danger" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3">Delete "{{ plan.name }}"?</h4>
+                    <p class="text-white-50">
+                        This action cannot be undone. Patients assigned to this plan will remain unchanged,
+                        but the plan configuration will be permanently removed.
+                    </p>
+
+                    <div class="alert alert-warning bg-warning bg-opacity-10 border-warning">
+                        <i class="bi bi-info-circle me-2"></i>
+                        This will delete the <strong>{{ plan.tier }}</strong> plan priced at
+                        <strong>${{ plan.annual_price }}/year</strong>.
+                    </div>
+
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-center gap-3">
+                            <a href="{% url 'plan_list' %}" class="btn btn-outline-light px-4">
+                                <i class="bi bi-x-lg me-1"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-danger px-4">
+                                <i class="bi bi-trash me-1"></i>Yes, Delete Plan
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
