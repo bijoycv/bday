@@ -11,6 +11,9 @@ then
     echo "PostgreSQL started"
 fi
 
+# Create database if not exists
+python create_db.py
+
 # Run migrations
 python manage.py migrate
 # Collect static files
