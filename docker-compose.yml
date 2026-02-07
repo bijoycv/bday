@@ -18,14 +18,16 @@ services:
       - DB_NAME=${DB_NAME}
       - VIRTUAL_HOST=bday.localhost
       - VIRTUAL_PORT=8002
+      - CELERY_BROKER_URL=redis://redis-server:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis-server:6379/0
     networks:
       - proxy_net
     restart: always
 
-  scheduler:
+  celery_worker:
     build: .
-    container_name: bday_scheduler
-    command: /app/scheduler.sh
+    container_name: bday_celery_worker
+    command: celery -A bday worker --loglevel=info
     volumes:
       - .:/app
     env_file:
@@ -37,11 +39,37 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
+      - CELERY_BROKER_URL=redis://redis-server:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis-server:6379/0
     networks:
       - proxy_net
     restart: always
     depends_on:
       - web
+
+  celery_beat:
+    build: .
+    container_name: bday_celery_beat
+    command: celery -A bday beat --loglevel=info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - DATABASE=postgres
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - CELERY_BROKER_URL=redis://redis-server:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis-server:6379/0
+    networks:
+      - proxy_net
+    restart: always
+    depends_on:
+      - web
+      - celery_worker
 
 volumes:
   static_volume:

@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'birthday',
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
@@ -151,3 +152,20 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 # Max files: 1000, Max parameters: 10000
 DATA_UPLOAD_MAX_NUMBER_FILES = 1200
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+
+
+# Celery Configuration with Redis
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://redis-server:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://redis-server:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+
+# Celery Beat Schedule (runs every hour)
+CELERY_BEAT_SCHEDULE = {
+    'send-scheduled-wishes-every-hour': {
+        'task': 'birthday.tasks.send_scheduled_wishes_task',
+        'schedule': 3600.0,  # Every hour (3600 seconds)
+    },
+}
