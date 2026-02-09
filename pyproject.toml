@@ -5,10 +5,13 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "celery>=5.6.2",
     "django>=6.0.1",
+    "django-celery-beat>=2.1.0",
     "psycopg2-binary>=2.9.11",
     "python-dotenv>=1.2.1",
     "pytz>=2025.2",
+    "redis>=7.1.0",
     "twilio>=9.10.0",
     "xhtml2pdf>=0.2.17",
 ]
