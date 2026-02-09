@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Service Pricing - Proceed Dental{% endblock %}
+
+{% block extra_css %}
+<style>
+    .service-table th {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+    }
+
+    .price-cell {
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+
+    .included-badge {
+        background: linear-gradient(135deg, #10b981, #34d399);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .category-header {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+        padding: 0.75rem 1rem;
+        border-left: 4px solid #6366f1;
+        margin-bottom: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">
+                <i class="bi bi-list-check text-primary me-2"></i>Service Pricing
+            </h2>
+            <p class="text-white-50 mb-0">Configure service pricing for each membership tier</p>
+        </div>
+        <a href="{% url 'service_create' %}" class="btn btn-primary rounded-pill px-4">
+            <i class="bi bi-plus-lg me-2"></i>Add Service
+        </a>
+    </div>
+
+    {% if messages %}
+    <div class="mb-4">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if services %}
+    {% for category_name, cat_services in services_by_category.items %}
+    {% if cat_services %}
+    <div class="card bg-dark border-secondary mb-4">
+        <div class="category-header">
+            <h5 class="mb-0 fw-bold">
+                {% if category_name == 'Preventive' %}
+                <i class="bi bi-shield-check text-success me-2"></i>
+                {% elif category_name == 'Restorative' %}
+                <i class="bi bi-bandaid text-info me-2"></i>
+                {% elif category_name == 'Cosmetic' %}
+                <i class="bi bi-stars text-warning me-2"></i>
+                {% elif category_name == 'Implant' %}
+                <i class="bi bi-gear text-primary me-2"></i>
+                {% else %}
+                <i class="bi bi-grid text-secondary me-2"></i>
+                {% endif %}
+                {{ category_name }} Services
+            </h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover mb-0 service-table">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Service</th>
+                        <th class="text-center">Regular Price</th>
+                        <th class="text-center" style="background: rgba(205, 127, 50, 0.1);">
+                            <span style="color: #CD7F32;">Bronze</span>
+                        </th>
+                        <th class="text-center" style="background: rgba(192, 192, 192, 0.1);">
+                            <span style="color: #C0C0C0;">Silver</span>
+                        </th>
+                        <th class="text-center" style="background: rgba(255, 215, 0, 0.1);">
+                            <span style="color: #FFD700;">Gold</span>
+                        </th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for service in cat_services %}
+                    <tr>
+                        <td>
+                            <div class="fw-bold">{{ service.name }}</div>
+                            {% if service.description %}
+                            <small class="text-white-50">{{ service.description|truncatewords:10 }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-center price-cell text-white-50">
+                            ${{ service.regular_price|floatformat:0 }}
+                        </td>
+                        <td class="text-center" style="background: rgba(205, 127, 50, 0.05);">
+                            {% if service.included_in_bronze %}
+                            <span class="included-badge">INCLUDED</span>
+                            {% elif service.bronze_price %}
+                            <span class="price-cell" style="color: #CD7F32;">${{ service.bronze_price|floatformat:0
+                                }}</span>
+                            {% else %}
+                            <span class="text-white-50">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center" style="background: rgba(192, 192, 192, 0.05);">
+                            {% if service.included_in_silver %}
+                            <span class="included-badge">INCLUDED</span>
+                            {% elif service.silver_price %}
+                            <span class="price-cell" style="color: #C0C0C0;">${{ service.silver_price|floatformat:0
+                                }}</span>
+                            {% else %}
+                            <span class="text-white-50">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center" style="background: rgba(255, 215, 0, 0.05);">
+                            {% if service.included_in_gold %}
+                            <span class="included-badge">INCLUDED</span>
+                            {% elif service.gold_price %}
+                            <span class="price-cell" style="color: #FFD700;">${{ service.gold_price|floatformat:0
+                                }}</span>
+                            {% else %}
+                            <span class="text-white-50">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'service_update' service.pk %}" class="btn btn-sm btn-outline-light">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'service_delete' service.pk %}" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% else %}
+    <div class="card bg-dark border-secondary">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-list-check d-block mb-3" style="font-size: 4rem; opacity: 0.3;"></i>
+            <h4>No Services Configured</h4>
+            <p class="text-white-50 mb-4">Add services with pricing for each membership tier</p>
+            <a href="{% url 'service_create' %}" class="btn btn-primary rounded-pill px-4">
+                <i class="bi bi-plus-lg me-2"></i>Add First Service
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

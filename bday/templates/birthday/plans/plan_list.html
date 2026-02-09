@@ -1,0 +1,350 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Membership Plans - Proceed Dental{% endblock %}
+
+{% block extra_css %}
+<style>
+    .plan-card {
+        border-radius: 16px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: linear-gradient(135deg, rgba(30, 30, 40, 0.9) 0%, rgba(20, 20, 30, 0.95) 100%);
+    }
+
+    .plan-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .plan-header {
+        padding: 1.5rem;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .plan-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        opacity: 0.15;
+        z-index: 0;
+    }
+
+    .plan-gold .plan-header {
+        background: linear-gradient(135deg, #FFD700 0%, #DAA520 100%);
+    }
+
+    .plan-silver .plan-header {
+        background: linear-gradient(135deg, #C0C0C0 0%, #A8A8A8 100%);
+    }
+
+    .plan-bronze .plan-header {
+        background: linear-gradient(135deg, #CD7F32 0%, #B87333 100%);
+    }
+
+    .plan-icon {
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .plan-price {
+        font-size: 2.5rem;
+        font-weight: 700;
+    }
+
+    .plan-period {
+        opacity: 0.8;
+        font-size: 0.9rem;
+    }
+
+    .plan-body {
+        padding: 1.5rem;
+    }
+
+    .discount-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        margin-bottom: 0.5rem;
+    }
+
+    .discount-value {
+        font-weight: 700;
+        font-size: 1.25rem;
+    }
+
+    .stat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+
+    .featured-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+    }
+
+    .empty-state i {
+        font-size: 4rem;
+        opacity: 0.3;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">
+                <i class="bi bi-gem text-primary me-2"></i>Membership Plans
+            </h2>
+            <p class="text-white-50 mb-0">Configure your Proceed Dental Saving Plan tiers</p>
+        </div>
+        <a href="{% url 'plan_create' %}" class="btn btn-primary rounded-pill px-4">
+            <i class="bi bi-plus-lg me-2"></i>Add New Plan
+        </a>
+    </div>
+
+    {% if messages %}
+    <div class="mb-4">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if plans %}
+    <!-- Included Services Section -->
+    <div class="card border-0 mb-5 text-white"
+        style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);">
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h4 class="fw-bold mb-3">Included in Every Plan</h4>
+                    <p class="text-white-50 mb-4">You will no longer fear the unknown costs of dental care. All our
+                        plans include the following high-quality services at no charge:</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <ul class="list-unstyled mb-0">
+                                <li class="d-flex align-items-start mb-2">
+                                    <i class="bi bi-check-circle-fill text-success me-2 mt-1"></i>
+                                    <span class="text-white-50">One Comprehensive Exam & Two 6-Month Recall Exams
+                                        yearly</span>
+                                </li>
+                                <li class="d-flex align-items-start mb-2">
+                                    <i class="bi bi-check-circle-fill text-success me-2 mt-1"></i>
+                                    <span class="text-white-50">Emergency Exams</span>
+                                </li>
+                                <li class="d-flex align-items-start mb-2">
+                                    <i class="bi bi-check-circle-fill text-success me-2 mt-1"></i>
+                                    <span class="text-white-50">Full-Mouth X-Rays annually</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-unstyled mb-0">
+                                <li class="d-flex align-items-start mb-2">
+                                    <i class="bi bi-check-circle-fill text-success me-2 mt-1"></i>
+                                    <span class="text-white-50">Problem focused Digital X-Rays as needed</span>
+                                </li>
+                                <li class="d-flex align-items-start mb-2">
+                                    <i class="bi bi-check-circle-fill text-success me-2 mt-1"></i>
+                                    <span class="text-white-50">Two Preventative Teeth Cleanings <small
+                                            class="d-block text-white-50">(Periodontal and Deep Cleaning Not
+                                            Included)</small></span>
+                                </li>
+                                <li class="d-flex align-items-start mb-2">
+                                    <i class="bi bi-check-circle-fill text-success me-2 mt-1"></i>
+                                    <span class="text-white-50">Two Fluoride treatments (no age limit)</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-center d-none d-md-block">
+                    <i class="bi bi-shield-check text-primary opacity-50" style="font-size: 8rem;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        {% for plan in plans %}
+        <div class="col-lg-4 col-md-6">
+            <div class="plan-card plan-{{ plan.tier|lower }} h-100 position-relative">
+                {% if plan.is_featured %}
+                <div class="featured-badge">
+                    <i class="bi bi-star-fill me-1"></i>Featured
+                </div>
+                {% endif %}
+
+                <div class="plan-header">
+                    <i class="bi {{ plan.icon }} plan-icon text-dark"></i>
+                    <h3 class="fw-bold mb-2 text-dark">{{ plan.name }}</h3>
+                    <div class="plan-price text-dark">
+                        ${{ plan.annual_price|floatformat:0 }}
+                        <span class="plan-period">/year</span>
+                    </div>
+                </div>
+
+                <div class="plan-body">
+                    {% if plan.description %}
+                    <p class="text-white-50 mb-3">{{ plan.description }}</p>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <h6 class="text-uppercase text-white-50 small mb-2">Discounts</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            <div class="discount-badge">
+                                <span class="text-white-50">Preventive</span>
+                                <span class="discount-value text-success">{{ plan.preventive_discount }}%</span>
+                            </div>
+                            <div class="discount-badge">
+                                <span class="text-white-50">Restorative</span>
+                                <span class="discount-value text-info">{{ plan.restorative_discount }}%</span>
+                            </div>
+                            <div class="discount-badge">
+                                <span class="text-white-50">Cosmetic</span>
+                                <span class="discount-value text-warning">{{ plan.cosmetic_discount }}%</span>
+                            </div>
+                            <div class="discount-badge">
+                                <span class="text-white-50">Implant</span>
+                                <span class="discount-value text-primary">{{ plan.implant_discount }}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 d-flex align-items-center justify-content-between">
+                        <span class="text-white-50">Active Members</span>
+                        <span class="stat-pill bg-success bg-opacity-25 text-success">
+                            <i class="bi bi-people-fill"></i>
+                            {{ plan.patient_count|default:0 }}
+                        </span>
+                    </div>
+
+                    <div class="d-flex gap-2 mt-auto">
+                        <a href="{% url 'plan_update' plan.pk %}" class="btn btn-outline-light btn-sm flex-fill">
+                            <i class="bi bi-pencil me-1"></i>Edit
+                        </a>
+                        <a href="{% url 'plan_delete' plan.pk %}" class="btn btn-outline-danger btn-sm">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    </div>
+
+                    {% if not plan.is_active %}
+                    <div class="mt-2 text-center">
+                        <span class="badge bg-secondary">Inactive</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card bg-dark border-secondary">
+        <div class="card-body empty-state">
+            <i class="bi bi-gem d-block"></i>
+            <h4>No Plans Configured</h4>
+            <p class="text-white-50 mb-4">Get started by creating your first membership plan</p>
+            <a href="{% url 'plan_create' %}" class="btn btn-primary rounded-pill px-4">
+                <i class="bi bi-plus-lg me-2"></i>Create First Plan
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Comparison Table -->
+    {% if plans %}
+    <div class="card bg-dark border-secondary mt-5">
+        <div class="card-header border-secondary">
+            <h5 class="mb-0">
+                <i class="bi bi-table me-2"></i>Plan Comparison
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Feature</th>
+                            {% for plan in plans %}
+                            <th class="text-center">
+                                <span class="badge" style="background-color: {{ plan.color }};">
+                                    {{ plan.tier }}
+                                </span>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Annual Price</td>
+                            {% for plan in plans %}
+                            <td class="text-center fw-bold">${{ plan.annual_price|floatformat:0 }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td>Preventive Discount</td>
+                            {% for plan in plans %}
+                            <td class="text-center text-success">{{ plan.preventive_discount }}%</td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td>Restorative Discount</td>
+                            {% for plan in plans %}
+                            <td class="text-center text-info">{{ plan.restorative_discount }}%</td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td>Cosmetic Discount</td>
+                            {% for plan in plans %}
+                            <td class="text-center text-warning">{{ plan.cosmetic_discount }}%</td>
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td>Implant Discount</td>
+                            {% for plan in plans %}
+                            <td class="text-center text-primary">{{ plan.implant_discount }}%</td>
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,306 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Campaigns - Proceed Dental{% endblock %}
+
+{% block extra_css %}
+<style>
+    .campaign-card {
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: linear-gradient(135deg, rgba(30, 30, 40, 0.9) 0%, rgba(20, 20, 30, 0.95) 100%);
+        transition: all 0.3s ease;
+    }
+
+    .campaign-card:hover {
+        border-color: rgba(99, 102, 241, 0.5);
+        transform: translateY(-2px);
+    }
+
+    .trigger-badge {
+        padding: 0.35rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .trigger-birthday {
+        background: linear-gradient(135deg, #ec4899, #f472b6);
+    }
+
+    .trigger-expiring {
+        background: linear-gradient(135deg, #f59e0b, #fbbf24);
+        color: #000;
+    }
+
+    .trigger-expired {
+        background: linear-gradient(135deg, #ef4444, #f87171);
+    }
+
+    .trigger-upgrade {
+        background: linear-gradient(135deg, #10b981, #34d399);
+    }
+
+    .trigger-welcome {
+        background: linear-gradient(135deg, #3b82f6, #60a5fa);
+    }
+
+    .trigger-anniversary {
+        background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+    }
+
+    .trigger-manual {
+        background: linear-gradient(135deg, #6b7280, #9ca3af);
+    }
+
+    .channel-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+    }
+
+    .channel-email {
+        background: rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
+    }
+
+    .channel-sms {
+        background: rgba(16, 185, 129, 0.2);
+        color: #34d399;
+    }
+
+    .channel-both {
+        background: rgba(139, 92, 246, 0.2);
+        color: #a78bfa;
+    }
+
+    .stat-box {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        opacity: 0.7;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">
+                <i class="bi bi-megaphone text-primary me-2"></i>Campaigns
+            </h2>
+            <p class="text-white-50 mb-0">Automated communications for birthdays, renewals, and promotions</p>
+        </div>
+        <a href="{% url 'campaign_create' %}" class="btn btn-primary rounded-pill px-4">
+            <i class="bi bi-plus-lg me-2"></i>Create Campaign
+        </a>
+    </div>
+
+    {% if messages %}
+    <div class="mb-4">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if campaigns %}
+    <div class="row g-4">
+        {% for campaign in campaigns %}
+        <div class="col-lg-6 col-xl-4">
+            <div class="campaign-card p-4 h-100">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <span class="trigger-badge 
+                            {% if 'birthday' in campaign.trigger_type %}trigger-birthday
+                            {% elif 'expiring' in campaign.trigger_type %}trigger-expiring
+                            {% elif campaign.trigger_type == 'expired' %}trigger-expired
+                            {% elif campaign.trigger_type == 'upgrade_promo' %}trigger-upgrade
+                            {% elif campaign.trigger_type == 'welcome' %}trigger-welcome
+                            {% elif campaign.trigger_type == 'anniversary' %}trigger-anniversary
+                            {% else %}trigger-manual{% endif %}">
+                            {{ campaign.get_trigger_type_display }}
+                        </span>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" {% if campaign.is_active %}checked{% endif %}
+                            disabled>
+                    </div>
+                </div>
+
+                <h5 class="fw-bold mb-2">{{ campaign.name }}</h5>
+                {% if campaign.description %}
+                <p class="text-white-50 small mb-3">{{ campaign.description }}</p>
+                {% endif %}
+
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <div class="channel-icon 
+                        {% if campaign.channel == 'Email' %}channel-email
+                        {% elif campaign.channel == 'SMS' %}channel-sms
+                        {% else %}channel-both{% endif %}">
+                        {% if campaign.channel == 'Email' %}
+                        <i class="bi bi-envelope"></i>
+                        {% elif campaign.channel == 'SMS' %}
+                        <i class="bi bi-chat-dots"></i>
+                        {% else %}
+                        <i class="bi bi-chat-square-text"></i>
+                        {% endif %}
+                    </div>
+                    <span class="text-white-50">{{ campaign.get_channel_display }}</span>
+                    <span class="text-white-50 ms-auto">
+                        <i class="bi bi-clock me-1"></i>{{ campaign.send_time|time:"g:i A" }}
+                    </span>
+                </div>
+
+                <div class="d-flex gap-2 mb-3">
+                    <div class="stat-box flex-fill">
+                        <div class="stat-value text-primary">{{ campaign.total_sent }}</div>
+                        <div class="stat-label">Total Sent</div>
+                    </div>
+                    <div class="stat-box flex-fill">
+                        <div class="stat-value text-success">
+                            {% if campaign.last_run %}
+                            {{ campaign.last_run|timesince }}
+                            {% else %}
+                            Never
+                            {% endif %}
+                        </div>
+                        <div class="stat-label">Last Run</div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-success btn-sm flex-fill run-campaign-btn"
+                        data-campaign-id="{{ campaign.pk }}" data-campaign-name="{{ campaign.name }}">
+                        <i class="bi bi-play-fill me-1"></i>Run Now
+                    </button>
+                    <a href="{% url 'campaign_update' campaign.pk %}" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    <a href="{% url 'campaign_delete' campaign.pk %}" class="btn btn-outline-danger btn-sm">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card bg-dark border-secondary">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-megaphone d-block mb-3" style="font-size: 4rem; opacity: 0.3;"></i>
+            <h4>No Campaigns Created</h4>
+            <p class="text-white-50 mb-4">Create automated campaigns for birthdays, renewals, and Gold promotions</p>
+            <a href="{% url 'campaign_create' %}" class="btn btn-primary rounded-pill px-4">
+                <i class="bi bi-plus-lg me-2"></i>Create First Campaign
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Run Campaign Modal -->
+<div class="modal fade" id="runCampaignModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark border-primary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title">
+                    <i class="bi bi-play-circle text-success me-2"></i>Run Campaign
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <div id="runCampaignLoading" class="d-none">
+                    <div class="spinner-border text-primary mb-3" role="status"></div>
+                    <p>Running campaign...</p>
+                </div>
+                <div id="runCampaignConfirm">
+                    <p>Run the campaign "<strong id="campaignNameDisplay"></strong>" now?</p>
+                    <p class="text-white-50 small">This will send messages to all eligible patients.</p>
+                </div>
+                <div id="runCampaignResult" class="d-none">
+                    <i class="bi bi-check-circle text-success d-block mb-2" style="font-size: 3rem;"></i>
+                    <p id="campaignResultMessage"></p>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary" id="runCampaignFooter">
+                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="confirmRunCampaignBtn">
+                    <i class="bi bi-play-fill me-1"></i>Run Campaign
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentCampaignId = null;
+    const runModal = new bootstrap.Modal(document.getElementById('runCampaignModal'));
+
+    document.querySelectorAll('.run-campaign-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            currentCampaignId = this.dataset.campaignId;
+            document.getElementById('campaignNameDisplay').textContent = this.dataset.campaignName;
+            document.getElementById('runCampaignConfirm').classList.remove('d-none');
+            document.getElementById('runCampaignLoading').classList.add('d-none');
+            document.getElementById('runCampaignResult').classList.add('d-none');
+            document.getElementById('runCampaignFooter').classList.remove('d-none');
+            runModal.show();
+        });
+    });
+
+    document.getElementById('confirmRunCampaignBtn').addEventListener('click', function () {
+        document.getElementById('runCampaignConfirm').classList.add('d-none');
+        document.getElementById('runCampaignLoading').classList.remove('d-none');
+        document.getElementById('runCampaignFooter').classList.add('d-none');
+
+        fetch(`/campaigns/${currentCampaignId}/run/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('runCampaignLoading').classList.add('d-none');
+                document.getElementById('runCampaignResult').classList.remove('d-none');
+                document.getElementById('campaignResultMessage').textContent = data.message;
+
+                setTimeout(() => {
+                    runModal.hide();
+                    location.reload();
+                }, 2000);
+            })
+            .catch(error => {
+                alert('Error running campaign: ' + error.message);
+                runModal.hide();
+            });
+    });
+</script>
+{% endblock %}

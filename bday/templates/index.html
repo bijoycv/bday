@@ -1,0 +1,449 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard | Proceed{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        background: linear-gradient(145deg, rgba(30, 41, 59, 0.6), rgba(30, 41, 59, 0.4));
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 1rem;
+        transition: transform 0.2s;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-5px);
+        background: rgba(30, 41, 59, 0.8);
+    }
+
+    .stat-number {
+        font-size: 1.75rem;
+        font-weight: 700;
+        background: linear-gradient(to right, #fff, #cbd5e1);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .stat-label {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .table-custom {
+        color: var(--text-main);
+    }
+
+    .table-custom thead th {
+        background: transparent;
+        color: var(--text-muted);
+        border-bottom: 2px solid rgba(255, 255, 255, 0.05);
+        font-weight: 500;
+    }
+
+    .table-custom td {
+        background: transparent;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        vertical-align: middle;
+        padding: 1rem 0.5rem;
+    }
+
+    .avatar-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        color: white;
+        margin-right: 12px;
+    }
+
+    .status-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        background: rgba(16, 185, 129, 0.1);
+        color: #34d399;
+    }
+
+    .status-badge.pending {
+        background: rgba(245, 158, 11, 0.1);
+        color: #fbbf24;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-8">
+        <h2 class="fw-bold mb-1">Proceed Overview <i class="bi bi-shield-check text-primary ms-1"></i></h2>
+        <p class="text-white-50 small mb-0 opacity-75">Membership health and enrollment in real-time.</p>
+    </div>
+    <div class="col-md-4 text-md-end align-self-center">
+        <div class="d-inline-block text-start glass-card p-2 px-3">
+            <small class="text-white-50 d-block uppercase tracking-wider small fw-bold opacity-75"
+                style="font-size: 0.75rem;">Current
+                Date</small>
+            <span class="fw-bold small mb-0">{% now "l, F jS, Y" %}</span>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Row -->
+<div class="row g-3 mb-3">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="stat-card p-3 h-100 d-flex flex-column justify-content-between shadow-sm">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <div class="h3 fw-bold text-primary mb-0" style="line-height: 1; font-size: 1.75rem;">
+                        {{ total_patients }}</div>
+                    <div class="text-white-50 fw-bold mt-1 tracking-wider"
+                        style="letter-spacing: 1px; font-size: 0.65rem;">TOTAL PATIENTS</div>
+                </div>
+                <div class="bg-primary bg-opacity-10 p-2 rounded-3">
+                    <i class="bi bi-people-fill fs-5 text-primary"></i>
+                </div>
+            </div>
+            <div class="d-flex gap-4 mt-2 pt-2 border-top border-secondary border-opacity-10" style="min-height: 24px;">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 0.75rem;"></i>
+                    <span class="text-success fw-bold small">{{ proceed_count }}</span>
+                    <span class="text-white-50" style="font-size: 0.65rem;">Proceed</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-circle text-white-50" style="font-size: 0.75rem;"></i>
+                    <span class="text-white fw-bold small">{{ regular_count }}</span>
+                    <span class="text-white-50" style="font-size: 0.65rem;">Regular</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <a href="{% url 'patient_list' %}?status=proceed_active" class="text-decoration-none">
+            <div class="stat-card p-3 h-100 d-flex flex-column justify-content-between shadow-sm">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="h3 fw-bold text-success mb-0" style="line-height: 1; font-size: 1.75rem;">
+                            {{ active_count }}</div>
+                        <div class="stat-label mt-1 tracking-wider fw-bold"
+                            style="font-size: 0.65rem; color: #94a3b8; letter-spacing: 1px;">ACTIVE PLANS</div>
+                    </div>
+                    <div class="bg-success bg-opacity-10 p-2 rounded-3">
+                        <i class="bi bi-shield-check fs-5 text-success"></i>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mt-2 pt-2 border-top border-secondary border-opacity-10"
+                    style="min-height: 24px;">
+                    <span class="text-white-50" style="font-size: 0.65rem;">In good standing</span>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <a href="{% url 'patient_list' %}?status=expiring_soon" class="text-decoration-none">
+            <div class="stat-card p-3 h-100 d-flex flex-column justify-content-between shadow-sm">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="h3 fw-bold text-warning mb-0" style="line-height: 1; font-size: 1.75rem;">
+                            {{ expiring_soon_count }}</div>
+                        <div class="stat-label mt-1 tracking-wider fw-bold"
+                            style="font-size: 0.65rem; color: #94a3b8; letter-spacing: 1px;">EXPIRING SOON</div>
+                    </div>
+                    <div class="bg-warning bg-opacity-10 p-2 rounded-3">
+                        <i class="bi bi-clock-history fs-5 text-warning"></i>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-1 mt-2 pt-2 border-top border-secondary border-opacity-10"
+                    style="min-height: 24px;">
+                    <i class="bi bi-calendar-event text-white-50" style="font-size: 0.6rem;"></i>
+                    <span class="text-white-50" style="font-size: 0.65rem;">Within 30 days</span>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <a href="{% url 'patient_list' %}?status=proceed_inactive" class="text-decoration-none">
+            <div
+                class="stat-card p-3 h-100 d-flex flex-column justify-content-between shadow-sm border-danger border-opacity-10">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="h3 fw-bold text-danger mb-0" style="line-height: 1; font-size: 1.75rem;">
+                            {{ expired_total_count }}</div>
+                        <div class="stat-label mt-1 tracking-wider fw-bold"
+                            style="font-size: 0.65rem; color: #94a3b8; letter-spacing: 1px;">EXPIRED PLANS</div>
+                    </div>
+                    <div class="bg-danger bg-opacity-10 p-2 rounded-3">
+                        <i class="bi bi-exclamation-triangle fs-5 text-danger"></i>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-1 mt-2 pt-2 border-top border-secondary border-opacity-10"
+                    style="min-height: 24px;">
+                    <i class="bi bi-arrow-repeat text-white-50" style="font-size: 0.6rem;"></i>
+                    <span class="text-white-50" style="font-size: 0.65rem;">Needs renewal</span>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Plan Tiers (Active Only) -->
+<div class="row g-3 mb-3">
+    <div class="col-12 col-md-4">
+        <div class="stat-card p-3" style="border-left: 3px solid #ffd700;">
+            <div class="d-flex align-items-center mb-2">
+                <div class="rounded-circle p-1 bg-warning bg-opacity-10 text-warning me-2"
+                    style="color: #ffd700 !important;">
+                    <i class="bi bi-award fs-5"></i>
+                </div>
+                <div class="stat-label" style="font-size: 0.75rem;">Active Gold</div>
+            </div>
+            <div class="stat-number h3 mb-0"
+                style="font-size: 1.75rem; background: linear-gradient(to right, #ffd700, #ffb900); -webkit-background-clip: text; background-clip: text;">
+                {{ gold_count }}</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="stat-card p-3" style="border-left: 3px solid #e0e0e0;">
+            <div class="d-flex align-items-center mb-2">
+                <div class="rounded-circle p-1 bg-secondary bg-opacity-10 text-secondary me-2"
+                    style="color: #e0e0e0 !important;">
+                    <i class="bi bi-award fs-5"></i>
+                </div>
+                <div class="stat-label" style="font-size: 0.75rem;">Active Silver</div>
+            </div>
+            <div class="stat-number h3 mb-0"
+                style="font-size: 1.75rem; background: linear-gradient(to right, #e0e0e0, #cbd5e1); -webkit-background-clip: text; background-clip: text;">
+                {{ silver_count }}</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="stat-card p-3" style="border-left: 3px solid #cd7f32;">
+            <div class="d-flex align-items-center mb-2">
+                <div class="rounded-circle p-1 me-2"
+                    style="color: #cd7f32; background-color: rgba(205, 127, 50, 0.1) !important;">
+                    <i class="bi bi-award fs-5"></i>
+                </div>
+                <div class="stat-label" style="font-size: 0.75rem;">Active Bronze</div>
+            </div>
+            <div class="stat-number h3 mb-0"
+                style="font-size: 1.75rem; background: linear-gradient(to right, #cd7f32, #a05a2c); -webkit-background-clip: text; background-clip: text;">
+                {{ bronze_count }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Analytics Row -->
+<div class="row g-3 mb-3">
+    <!-- Monthly Trends -->
+    <div class="col-12 col-xl-8">
+        <div class="glass-card p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="mb-0 fw-bold">Plan Trends</h5>
+                    <p class="text-white-50 small mb-0 opacity-75">Last 6 Months</p>
+                </div>
+                <div class="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill small">
+                    <i class="bi bi-calendar3 me-1"></i> 6M
+                </div>
+            </div>
+            <div style="height: 250px;">
+                <canvas id="planTransitionChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overall Breakdown -->
+    <div class="col-12 col-xl-4">
+        <div class="glass-card p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="mb-0 fw-bold">Distribution</h5>
+                    <p class="text-white-50 small mb-0 opacity-75">Lifetime</p>
+                </div>
+                <div class="badge bg-secondary bg-opacity-10 text-white-50 px-2 py-1 rounded-pill small">
+                    <i class="bi bi-pie-chart-fill me-1"></i> All Time
+                </div>
+            </div>
+            <div style="height: 250px;" class="d-flex align-items-center justify-content-center">
+                <canvas id="overallBreakdownChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent List -->
+<div class="glass-card p-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0 fw-bold">Upcoming Birthdays</h5>
+        <a href="{% url 'patient_list' %}?sort=upcoming"
+            class="btn btn-outline-light btn-sm rounded-pill px-3 py-1 small">View All</a>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-custom mb-0 table-sm">
+            <thead>
+                <tr>
+                    <th class="small py-2">Patient</th>
+                    <th class="small py-2">DOB</th>
+                    <th class="small py-2 text-center">Age</th>
+                    <th class="small py-2">Status</th>
+                    <th class="text-end small py-2">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for patient in upcoming_birthdays %}
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                    <td class="py-2">
+                        <div class="d-flex align-items-center">
+                            <div class="avatar-circle" style="width: 32px; height: 32px; font-size: 0.8rem;">
+                                {{ patient.first_name|first }}{{ patient.last_name|first }}
+                            </div>
+                            <div>
+                                <div class="fw-semibold text-white small">
+                                    {{ patient.first_name }} {{ patient.last_name }}
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="py-2"><span class="text-white-50 small">{{ patient.dob|date:"M d, Y" }}</span></td>
+                    <td class="py-2 text-center"><span class="text-white small">{{ patient.age_turning }}</span></td>
+                    <td class="py-2">
+                        {% if patient.has_scheduled %}
+                        <span class="status-badge py-1 px-2"
+                            style="background: rgba(34, 211, 238, 0.1); color: #22d3ee; font-size: 0.7rem;">Scheduled</span>
+                        {% else %}
+                        <span class="status-badge pending py-1 px-2" style="font-size: 0.7rem;">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end py-2">
+                        <a href="{% url 'patient_list' %}?q={{ patient.first_name }}+{{ patient.last_name }}"
+                            class="btn btn-sm btn-premium py-1 px-3 small" style="font-size: 0.75rem;">
+                            {% if patient.has_scheduled %}Edit{% else %}Send{% endif %}
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not upcoming_birthdays %}
+                <tr>
+                    <td colspan="5" class="text-center py-5 text-white-50 opacity-75">No upcoming birthdays found.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // --- Monthly Trends Bar Chart ---
+        const transitionCtx = document.getElementById('planTransitionChart').getContext('2d');
+        const labels = JSON.parse('{{ chart_labels|safe }}');
+        const upgrades = JSON.parse('{{ chart_upgrades|safe }}');
+        const downgrades = JSON.parse('{{ chart_downgrades|safe }}');
+        const renewals = JSON.parse('{{ chart_renewals|safe }}');
+
+        new Chart(transitionCtx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Upgrades',
+                        data: upgrades,
+                        backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                        borderColor: '#10b981',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                    },
+                    {
+                        label: 'Renewals',
+                        data: renewals,
+                        backgroundColor: 'rgba(99, 102, 241, 0.6)',
+                        borderColor: '#6366f1',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                    },
+                    {
+                        label: 'Downgrades',
+                        data: downgrades,
+                        backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                        borderColor: '#ef4444',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { color: '#94a3b8', font: { family: 'Outfit' }, usePointStyle: true }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        titleFont: { family: 'Outfit' },
+                        bodyFont: { family: 'Outfit' }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { family: 'Outfit' } } },
+                    y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8', stepSize: 1, font: { family: 'Outfit' } } }
+                }
+            }
+        });
+
+        // --- Overall Breakdown Donut Chart ---
+        const breakdownCtx = document.getElementById('overallBreakdownChart').getContext('2d');
+        new Chart(breakdownCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Upgrades', 'Renewals', 'Downgrades'],
+                datasets: [{
+                    data: [{{ total_up }}, {{ total_ren }}, {{ total_down }}],
+        backgroundColor: [
+        'rgba(16, 185, 129, 0.7)',
+        'rgba(99, 102, 241, 0.7)',
+        'rgba(239, 68, 68, 0.7)'
+    ],
+        borderColor: 'rgba(15, 23, 42, 1)',
+        borderWidth: 2,
+        hoverOffset: 15
+                }]
+            },
+        options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '70%',
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    color: '#94a3b8',
+                    font: { family: 'Outfit' },
+                    padding: 20,
+                    usePointStyle: true
+                }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                padding: 12,
+                titleFont: { family: 'Outfit' },
+                bodyFont: { family: 'Outfit' }
+            }
+        }
+    }
+        });
+    });
+</script>
+{% endblock %}

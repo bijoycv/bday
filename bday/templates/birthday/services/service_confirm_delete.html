@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Service - Proceed Dental{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card bg-dark border-danger">
+                <div class="card-header border-danger bg-danger bg-opacity-10">
+                    <h5 class="mb-0 text-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Delete Service
+                    </h5>
+                </div>
+                <div class="card-body text-center py-4">
+                    <i class="bi bi-list-check text-danger" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3">Delete "{{ service.name }}"?</h4>
+                    <p class="text-white-50">
+                        This will permanently remove the service and its pricing information.
+                    </p>
+
+                    <div class="alert alert-info bg-info bg-opacity-10 border-info text-start">
+                        <strong>Service Details:</strong><br>
+                        <i class="bi bi-tag me-1"></i> Category: {{ service.get_category_display }}<br>
+                        <i class="bi bi-currency-dollar me-1"></i> Regular Price: ${{ service.regular_price }}
+                    </div>
+
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-center gap-3">
+                            <a href="{% url 'service_list' %}" class="btn btn-outline-light px-4">
+                                <i class="bi bi-x-lg me-1"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-danger px-4">
+                                <i class="bi bi-trash me-1"></i>Yes, Delete Service
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

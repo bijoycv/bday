@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} | Proceed{% endblock %}
+
+{% block extra_css %}
+{% include 'components/premium_styles.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{% url 'template_list' %}" class="btn btn-outline-light me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h2 class="fw-bold mb-0">{{ title }}</h2>
+        </div>
+
+        <div class="glass-card p-4">
+            <form method="post">
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger mb-4">
+                    {% for error in form.non_field_errors %}
+                    {{ error }}
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label class="form-label text-white text-opacity-75 small">Template Name</label>
+                    {{ form.name }}
+                    {% if form.name.errors %}
+                    <div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-white text-opacity-75 small">Type</label>
+                    {{ form.type }}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-white text-opacity-75 small">Subject (Email only)</label>
+                    {{ form.subject }}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-white text-opacity-75 small">Message Body</label>
+                    <div id="body-editor" class="bg-dark text-white border-secondary border-opacity-25"
+                        style="height: 200px; border-radius: 0.375rem;"></div>
+                    <div style="display:none;">{{ form.body }}</div>
+                    <div class="form-text text-white-50 mt-2">
+                        Available placeholders: <code>{first_name}</code>, <code>{last_name}</code>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-white text-opacity-75 small">Default Signature</label>
+                    {{ form.signature }}
+                    <div class="form-text text-white-50 small">
+                        Select a saved signature to append by default. Manage signatures in the <a
+                            href="{% url 'signature_list' %}" class="text-primary">Signatures</a> section.
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                    <a href="{% url 'template_list' %}" class="btn btn-outline-light me-md-2">Cancel</a>
+                    <button type="submit" class="btn btn-premium px-4">Save Template</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var quill = new Quill('#body-editor', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                    [{ 'color': [] }, { 'background': [] }],
+                    ['clean']
+                ]
+            }
+        });
+
+        // Load initial content
+        var initialContent = `{{ form.body.value|default:''|escapejs }}`;
+        // Use clipboard to handle HTML correctly or setText if plain
+        // We assume HTML since we are using an editor
+        if (initialContent) {
+            quill.clipboard.dangerouslyPasteHTML(initialContent);
+        }
+
+        // Sync to hidden textarea
+        var input = document.getElementById('id_body');
+        // Note: Django id is typically id_field_name
+
+        quill.on('text-change', function () {
+            input.value = quill.root.innerHTML;
+        });
+
+        // Toggle editor based on Type?
+        // Maybe optional but user asked for it in template creator.
+        // If they pick SMS, stripped text might be better?
+        // For now, allow HTML editor for both as requested.
+    });
+</script>
+{% endblock %}

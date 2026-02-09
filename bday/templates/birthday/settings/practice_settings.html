@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Settings - Proceed Dental{% endblock %}
+
+{% block extra_css %}
+<style>
+    .settings-section {
+        background: linear-gradient(135deg, rgba(30, 30, 40, 0.9) 0%, rgba(20, 20, 30, 0.95) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .settings-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Header -->
+            <div class="mb-4">
+                <h2 class="fw-bold mb-1">
+                    <i class="bi bi-gear text-primary me-2"></i>Practice Settings
+                </h2>
+                <p class="text-white-50 mb-0">Configure your practice details, plan rules, and communication settings
+                </p>
+            </div>
+
+            {% if messages %}
+            <div class="mb-4">
+                {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <form method="post" novalidate>
+                {% csrf_token %}
+
+                <!-- Practice Information -->
+                <div class="settings-section">
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="settings-icon bg-primary bg-opacity-25 text-primary me-3">
+                            <i class="bi bi-building"></i>
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-0">Practice Information</h5>
+                            <p class="text-white-50 mb-0 small">Basic details about your dental practice</p>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Practice Name</label>
+                            {{ form.practice_name }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone Number</label>
+                            {{ form.practice_phone }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email Address</label>
+                            {{ form.practice_email }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Website</label>
+                            {{ form.practice_website }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Address</label>
+                            {{ form.practice_address }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Plan Rules -->
+                <div class="settings-section">
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="settings-icon bg-warning bg-opacity-25 text-warning me-3">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-0">Plan Rules</h5>
+                            <p class="text-white-50 mb-0 small">Membership duration, grace period, and fees</p>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Plan Duration (Days)</label>
+                            {{ form.plan_duration_days }}
+                            <small class="text-white-50">Standard is 365 days (1 year)</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Grace Period (Days)</label>
+                            {{ form.grace_period_days }}
+                            <small class="text-white-50">Days after expiry for reinstatement</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Reinstatement Fee ($)</label>
+                            {{ form.reinstatement_fee }}
+                            <small class="text-white-50">Fee for lapsed memberships</small>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Enrollment Form URL</label>
+                            {{ form.enrollment_base_url }}
+                            <small class="text-white-50">URL to your online enrollment form</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Email Settings -->
+                <div class="settings-section">
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="settings-icon bg-info bg-opacity-25 text-info me-3">
+                            <i class="bi bi-envelope"></i>
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-0">Email Settings</h5>
+                            <p class="text-white-50 mb-0 small">Configure email sender information</p>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">From Email</label>
+                            {{ form.from_email }}
+                            <small class="text-white-50">Email address patients will see</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Reply-To Email</label>
+                            {{ form.reply_to_email }}
+                            <small class="text-white-50">Where replies will be sent</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SMS Settings -->
+                <div class="settings-section">
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="settings-icon bg-success bg-opacity-25 text-success me-3">
+                            <i class="bi bi-chat-dots"></i>
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-0">SMS Settings</h5>
+                            <p class="text-white-50 mb-0 small">Configure SMS sender information</p>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                {{ form.sms_enabled }}
+                                <label class="form-check-label ms-2" for="id_sms_enabled">SMS Enabled</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">SMS Sender Name</label>
+                            {{ form.sms_sender_name }}
+                            <small class="text-white-50">Max 20 characters</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Automation Settings -->
+                <div class="settings-section">
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="settings-icon bg-danger bg-opacity-25 text-danger me-3">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-0">Automation</h5>
+                            <p class="text-white-50 mb-0 small">Enable or disable automatic campaigns</p>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                {{ form.auto_birthday_wishes }}
+                                <label class="form-check-label ms-2" for="id_auto_birthday_wishes">
+                                    Auto Birthday Wishes
+                                </label>
+                                <small class="text-white-50 d-block">Automatically send birthday wishes</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                {{ form.auto_renewal_reminders }}
+                                <label class="form-check-label ms-2" for="id_auto_renewal_reminders">
+                                    Auto Renewal Reminders
+                                </label>
+                                <small class="text-white-50 d-block">Automatically send renewal reminders</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save Button -->
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary px-5 py-2">
+                        <i class="bi bi-check-lg me-2"></i>Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

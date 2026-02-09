@@ -1,0 +1,788 @@
+{% extends 'base.html' %}
+
+{% block title %}Scheduled Wishes | Proceed{% endblock %}
+
+{% block extra_css %}
+{% include 'components/premium_styles.html' %}
+<style>
+    .wish-row {
+        transition: background-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .wish-row:hover {
+        background-color: rgba(255, 255, 255, 0.03) !important;
+        transform: scale(1.002);
+    }
+
+    .status-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .status-Pending {
+        background: rgba(245, 158, 11, 0.1);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .status-Sent {
+        background: rgba(16, 185, 129, 0.1);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .status-Failed {
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .status-badge:hover {
+        filter: brightness(1.2);
+        box-shadow: 0 0 15px currentColor;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">Scheduled Wishes</h2>
+    <div class="d-flex align-items-center gap-3">
+        <div class="glass-card px-3 py-2 d-flex align-items-center gap-2"
+            style="background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255,255,255,0.1);">
+            <i class="bi bi-geo-alt-fill text-danger"></i>
+            <span class="text-white-50 small">California:</span>
+            <span id="california-clock" class="fw-bold text-white">--</span>
+        </div>
+        <a href="{% url 'schedule_wish' %}" class="btn btn-premium">
+            <i class="bi bi-clock-history"></i> Schedule New
+        </a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-5">
+        <div class="glass-card p-2 d-flex align-items-center">
+            <i class="bi bi-search text-muted ms-2 me-3"></i>
+            <input type="text" id="wish-search" class="form-control border-0 bg-transparent text-white"
+                placeholder="Search by patient name or email...">
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="glass-card p-2 d-flex justify-content-center">
+            <div class="btn-group w-100" role="group">
+                <a href="{% url 'scheduled_list' %}"
+                    class="btn btn-sm {% if not current_status %}btn-premium{% else %}text-white-50 border-0{% endif %} px-3 rounded-pill">All</a>
+                <a href="?status=Pending"
+                    class="btn btn-sm {% if current_status == 'Pending' %}btn-premium{% else %}text-white-50 border-0{% endif %} px-3 rounded-pill">Pending</a>
+                <a href="?status=Sent"
+                    class="btn btn-sm {% if current_status == 'Sent' %}btn-premium{% else %}text-white-50 border-0{% endif %} px-3 rounded-pill">Sent</a>
+                <a href="?status=Failed"
+                    class="btn btn-sm {% if current_status == 'Failed' %}btn-premium{% else %}text-white-50 border-0{% endif %} px-3 rounded-pill">Failed</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="glass-card p-2 d-flex align-items-center justify-content-between">
+            <span class="text-white-50 small ms-2">Page Size:</span>
+            <select class="form-select form-select-sm bg-transparent border-0 text-white fw-bold text-end"
+                style="width: auto;"
+                onchange="window.location.href='?per_page=' + this.value + '{% if current_status %}&status={{ current_status }}{% endif %}'">
+                <option value="10" {% if per_page == 10 %}selected{% endif %} class="bg-dark">10</option>
+                <option value="25" {% if per_page == 25 %}selected{% endif %} class="bg-dark">25</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %} class="bg-dark">50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %} class="bg-dark">100</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<div class="glass-card p-0 overflow-hidden">
+    <div class="table-responsive">
+        <table class="table table-custom mb-0 table-hover align-middle">
+            <thead>
+                <tr>
+                    <th class="ps-4 text-center" style="width: 50px;">#</th>
+                    <th>Patient</th>
+                    <th>Type</th>
+                    <th>Template</th>
+                    <th>Scheduled For <span class="badge bg-info bg-opacity-25 text-info small">CA Time</span></th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th class="text-end pe-4">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for wish in wishes %}
+                <tr class="wish-row" style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#wishDetailModal"
+                    data-wish-id="{{ wish.pk }}"
+                    data-patient="{{ wish.patient.first_name }} {{ wish.patient.last_name }}"
+                    data-email="{{ wish.patient.email }}" data-template-id="{{ wish.template.id|default:'' }}"
+                    data-template-name="{{ wish.template.name|default:'-' }}"
+                    data-template-type="{{ wish.template.type|default:'Email' }}"
+                    data-subject="{% if wish.custom_subject %}{{ wish.custom_subject }}{% else %}{{ wish.template.subject|default:'-' }}{% endif %}"
+                    data-body="{% if wish.custom_body %}{{ wish.custom_body|escapejs }}{% else %}{{ wish.template.body|default:'-'|escapejs }}{% endif %}"
+                    data-status="{{ wish.status }}" data-scheduled="{{ wish.scheduled_for|date:'M d, Y h:i A' }}"
+                    data-scheduled-iso="{{ wish.scheduled_for|date:'Y-m-d\TH:i' }}"
+                    data-sent="{{ wish.sent_at|date:'M d, Y h:i A'|default:'-' }}"
+                    data-created="{{ wish.created_at|date:'M d, Y h:i A' }}"
+                    data-cc="{{ wish.cc_recipients|default:'' }}" data-bcc="{{ wish.bcc_recipients|default:'' }}"
+                    data-phone="{{ wish.patient.phone }}" data-error="{{ wish.error_message|default:'' }}">
+                    <td class="ps-4 text-center text-white-50 small">
+                        {{ wishes.start_index|add:forloop.counter0 }}
+                    </td>
+                    <td>
+                        <div class="fw-bold fs-6 text-white">{{ wish.patient.first_name }} {{ wish.patient.last_name }}
+                        </div>
+                        <div class="small text-white-50 opacity-75">{{ wish.patient.email }}</div>
+                    </td>
+                    <td>
+                        <span class="badge bg-info bg-opacity-10 text-info">
+                            {{ wish.template.type|default:"Email" }}
+                        </span>
+                    </td>
+                    <td><span class="text-white-50">{{ wish.template.name|default:"-" }}</span></td>
+                    <td>
+                        <span class="text-white-50">{{ wish.scheduled_for|date:"M d, Y h:i A" }}</span> <span
+                            class="badge bg-info bg-opacity-10 text-info small">PST</span>
+                        {% if wish.status == 'Pending' %}
+                        <br><small class="text-info">{{ wish.scheduled_for|timeuntil }} left</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="status-badge status-{{ wish.status }}">{{ wish.status }}</span>
+                        {% if wish.sent_at %}
+                        <div class="text-white-50 mt-1" style="font-size: 0.75rem;">
+                            <i class="bi bi-clock-history me-1"></i>At: {{ wish.sent_at|date:"M d, h:i A" }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td class="text-white-50 small">{{ wish.created_at|date:"M d, Y" }}</td>
+                    <td class="text-end pe-4" onclick="event.stopPropagation();">
+                        <div class="d-flex justify-content-end gap-2">
+                            <button class="btn btn-sm btn-outline-light border-opacity-25 view-details-btn"
+                                type="button" data-bs-toggle="modal" data-bs-target="#wishDetailModal"
+                                data-wish-id="{{ wish.pk }}"
+                                data-patient="{{ wish.patient.first_name }} {{ wish.patient.last_name }}"
+                                data-email="{{ wish.patient.email }}"
+                                data-template="{{ wish.template.name|default:'-' }}"
+                                data-subject="{% if wish.custom_subject %}{{ wish.custom_subject }}{% else %}{{ wish.template.subject|default:'-' }}{% endif %}"
+                                data-body="{% if wish.custom_body %}{{ wish.custom_body|escapejs }}{% else %}{{ wish.template.body|default:'-'|escapejs }}{% endif %}"
+                                data-status="{{ wish.status }}"
+                                data-scheduled="{{ wish.scheduled_for|date:'M d, Y h:i A' }}"
+                                data-sent="{{ wish.sent_at|date:'M d, Y h:i A'|default:'-' }}"
+                                data-created="{{ wish.created_at|date:'M d, Y h:i A' }}"
+                                data-cc="{{ wish.cc_recipients|default:'-' }}"
+                                data-bcc="{{ wish.bcc_recipients|default:'-' }}"
+                                data-error="{{ wish.error_message|default:'' }}">
+                                <i class="bi bi-eye"></i>
+                            </button>
+
+                            {% if wish.status == 'Pending' %}
+                            <form method="post" action="{% url 'scheduled_delete' wish.pk %}" class="d-inline"
+                                onsubmit="return confirm('Are you sure you want to remove this scheduled wish?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger border-opacity-25"
+                                    title="Remove">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% else %}
+                            <form method="post" action="{% url 'scheduled_delete' wish.pk %}" class="d-inline"
+                                onsubmit="return confirm('Are you sure you want to delete this record from history?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger border-opacity-25"
+                                    title="Delete Permanent">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center py-5">
+                        <div class="opacity-25 mb-3">
+                            <i class="bi bi-calendar-x fs-1"></i>
+                        </div>
+                        <h5 class="text-white-50">No scheduled wishes found</h5>
+                        <p class="small text-muted mb-0">{% if current_status %}Try changing the status filter or search
+                            query.{% else %}Get started by scheduling your first birthday wish!{% endif %}</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if wishes.has_other_pages %}
+<div class="p-3 border-top border-white border-opacity-10 d-flex justify-content-between align-items-center">
+    <div class="text-white-50 small">
+        Showing {{ wishes.start_index }} to {{ wishes.end_index }} of {{ wishes.paginator.count }} wishes
+    </div>
+    <nav>
+        <ul class="pagination pagination-sm mb-0">
+            {% if wishes.has_previous %}
+            <li class="page-item">
+                <a class="page-link bg-dark border-white border-opacity-10 text-white"
+                    href="?page=1{% if current_status %}&status={{ current_status }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}">
+                    <i class="bi bi-chevron-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link bg-dark border-white border-opacity-10 text-white"
+                    href="?page={{ wishes.previous_page_number }}{% if current_status %}&status={{ current_status }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+            {% endif %}
+
+            {% for num in wishes.paginator.page_range %}
+            {% if wishes.number == num %}
+            <li class="page-item active text-white"><span class="page-link bg-primary border-primary text-white">{{
+                    num }}</span></li>
+            {% elif num > wishes.number|add:'-3' and num < wishes.number|add:'3' %} <li class="page-item">
+                <a class="page-link bg-dark border-white border-opacity-10 text-white"
+                    href="?page={{ num }}{% if current_status %}&status={{ current_status }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}">{{
+                    num }}</a>
+                </li>
+                {% endif %}
+                {% endfor %}
+
+                {% if wishes.has_next %}
+                <li class="page-item">
+                    <a class="page-link bg-dark border-white border-opacity-10 text-white"
+                        href="?page={{ wishes.next_page_number }}{% if current_status %}&status={{ current_status }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link bg-dark border-white border-opacity-10 text-white"
+                        href="?page={{ wishes.paginator.num_pages }}{% if current_status %}&status={{ current_status }}{% endif %}{% if per_page %}&per_page={{ per_page }}{% endif %}">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+        </ul>
+    </nav>
+</div>
+{% endif %}
+</div>
+
+<!-- Wish Details Modal -->
+<div class="modal fade" id="wishDetailModal" tabindex="-1" aria-labelledby="wishDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-dark border border-secondary border-opacity-25"
+            style="background: var(--sidebar-bg); backdrop-filter: blur(12px);">
+            <div class="modal-header border-bottom border-secondary border-opacity-25">
+                <h5 class="modal-title fw-bold" id="wishDetailModalLabel">
+                    <i class="bi bi-envelope-paper me-2 text-primary"></i>Scheduled Wish Details
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Patient Info -->
+                <div class="glass-card p-3 mb-4" style="background: rgba(99, 102, 241, 0.1);">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-circle me-3" id="detail-avatar"
+                            style="width: 50px; height: 50px; background: linear-gradient(135deg, #6366f1, #a855f7); display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: bold; font-size: 1.2rem;">
+                        </div>
+                        <div>
+                            <h5 class="mb-0 fw-bold" id="detail-patient">Patient Name</h5>
+                            <small class="text-muted" id="detail-email">email@example.com</small>
+                        </div>
+                        <div class="ms-auto">
+                            <span class="badge fs-6" id="detail-status-badge">Status</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Timing Info (Visible in View Mode only or minimized in edit) -->
+                <div id="timing-info-row" class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="glass-card p-3 h-100">
+                            <div class="small text-white-50 mb-1"><i class="bi bi-clock me-1"></i>Scheduled For <span
+                                    class="badge bg-info bg-opacity-25 text-info small">CA Time</span></div>
+                            <div class="fw-bold text-white" id="detail-scheduled">-</div>
+                            <div id="edit-scheduled-group" class="d-none mt-1">
+                                <input type="datetime-local" id="edit-scheduled-for"
+                                    class="form-control form-control-sm bg-dark text-white border-white border-opacity-10">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="glass-card p-3 h-100">
+                            <div class="small text-white-50 mb-1"><i class="bi bi-send-check me-1"></i>Sent At</div>
+                            <div class="fw-bold text-white" id="detail-sent">-</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="glass-card p-3 h-100">
+                            <div class="small text-white-50 mb-1"><i class="bi bi-calendar-plus me-1"></i>Created</div>
+                            <div class="fw-bold text-white" id="detail-created">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- To (Email/Phone) - View/Edit -->
+                <div class="mb-3">
+                    <label class="form-label text-white-50 small" id="modal-to-label">To (Email)</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-dark border-secondary border-opacity-25 text-white-50"
+                            style="width: 45px; justify-content: center;">
+                            <i class="bi bi-envelope" id="modal-to-icon"></i>
+                        </span>
+                        <input type="text" id="modal-to-display"
+                            class="form-control bg-dark text-white border-secondary border-opacity-25" readonly>
+                    </div>
+                </div>
+                <!-- Template, Subject, Body (Edit Section) -->
+                <div id="edit-content-section" class="d-none">
+                    <div class="mb-3">
+                        <label class="form-label text-white-50 small">Select Template</label>
+                        <select id="edit-template-select"
+                            class="form-select bg-dark text-white border-secondary border-opacity-25">
+                            <option value="">-- Select a template or write custom --</option>
+                            {% for tp in templates %}
+                            <option value="{{ tp.pk }}">{{ tp.name }} ({{ tp.type }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Subject -->
+                    <div class="mb-3" id="edit-subject-group">
+                        <label
+                            class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
+                            <span>Subject</span>
+                            <button type="button" class="btn btn-link p-0 text-white-50 text-decoration-none"
+                                onclick="copyToClipboard(document.getElementById('edit-subject').value, this)">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </label>
+                        <input type="text" id="edit-subject"
+                            class="form-control bg-dark text-white border-secondary border-opacity-25">
+                    </div>
+
+                    <!-- Body -->
+                    <div class="mb-3">
+                        <label
+                            class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
+                            <span>Message Body</span>
+                            <button type="button" class="btn btn-link p-0 text-white-50 text-decoration-none"
+                                onclick="copyQuillBody(this)">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </label>
+                        <div id="edit-quill-body" class="bg-dark text-white border-secondary border-opacity-25"
+                            style="height: 200px; border-radius: 0.375rem;"></div>
+                        <textarea id="edit-body-hidden" style="display:none;"></textarea>
+                    </div>
+
+                    <!-- Signature -->
+                    <div class="mb-3">
+                        <label
+                            class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
+                            <span>Signature</span>
+                            <a href="{% url 'signature_list' %}" class="text-primary small" target="_blank"><i
+                                    class="bi bi-gear"></i> Manage</a>
+                        </label>
+                        <select id="edit-signature-select"
+                            class="form-select bg-dark text-white border-secondary border-opacity-25 mb-2">
+                            <option value="" data-content="">-- No Signature --</option>
+                            {% for sig in signatures %}
+                            <option value="{{ sig.pk }}" data-content="{{ sig.content|default:'' }}">{{ sig.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div id="edit-quill-signature" class="bg-dark text-white border-secondary border-opacity-25"
+                            style="height: 120px; border-radius: 0.375rem;"></div>
+                        <textarea id="edit-signature-hidden" style="display:none;"></textarea>
+                    </div>
+                </div>
+
+                <!-- View Mode Static Content -->
+                <div id="view-content-section" class="mb-4">
+                    <h6 class="text-white-50 small text-uppercase mb-2">Message Content</h6>
+                    <div class="glass-card p-3">
+                        <div class="fw-bold mb-2 text-white" id="detail-template">Template Name</div>
+                        <div id="detail-subject-wrapper">
+                            <div class="small text-white-50">Subject:</div>
+                            <div class="mb-2 text-white" id="detail-subject">-</div>
+                        </div>
+                        <div class="small text-white-50">Message:</div>
+                        <div class="p-2 rounded mb-2 text-white" id="detail-body"
+                            style="background: rgba(0,0,0,0.3); max-height: 250px; overflow-y: auto;">-</div>
+                    </div>
+                </div>
+
+                <!-- Recipients -->
+                <div class="row g-3 mb-4" id="recipients-row">
+                    <div class="col-md-6">
+                        <div class="glass-card p-3 h-100">
+                            <div class="small text-white-50 mb-1"><i class="bi bi-people me-1"></i>CC Recipients</div>
+                            <div id="detail-cc" class="small text-white opacity-75">-</div>
+                            <div id="edit-cc-group" class="d-none mt-2">
+                                <div class="glass-card p-2"
+                                    style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.2);">
+                                    {% for cc in saved_cc %}
+                                    <div class="form-check">
+                                        <input class="form-check-input edit-cc-check" type="checkbox"
+                                            value="{{ cc.email }}" id="ecc_{{ cc.pk }}">
+                                        <label class="form-check-label small text-white" for="ecc_{{ cc.pk }}">
+                                            {{ cc.name }} <span class="text-white-50">({{ cc.email }})</span>
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="glass-card p-3 h-100">
+                            <div class="small text-white-50 mb-1"><i class="bi bi-people-fill me-1"></i>BCC Recipients
+                            </div>
+                            <div id="detail-bcc" class="small text-white opacity-75">-</div>
+                            <div id="edit-bcc-group" class="d-none mt-2">
+                                <div class="glass-card p-2"
+                                    style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.2);">
+                                    {% for bcc in saved_bcc %}
+                                    <div class="form-check">
+                                        <input class="form-check-input edit-bcc-check" type="checkbox"
+                                            value="{{ bcc.email }}" id="ebcc_{{ bcc.pk }}">
+                                        <label class="form-check-label small text-white" for="ebcc_{{ bcc.pk }}">
+                                            {{ bcc.name }} <span class="text-white-50">({{ bcc.email }})</span>
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error Message (if failed) -->
+                <div id="detail-error-container" class="d-none mt-4">
+                    <div class="glass-card p-3 border border-danger border-opacity-25"
+                        style="background: rgba(220, 53, 69, 0.1);">
+                        <h6 class="text-danger small text-uppercase mb-2"><i
+                                class="bi bi-exclamation-triangle-fill me-2"></i>Delivery Error</h6>
+                        <div id="detail-error" class="text-white-50 small">Error description goes here...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top border-white border-opacity-10 justify-content-between p-3"
+                style="background: rgba(0,0,0,0.2);">
+                <div class="d-flex gap-2">
+                    <form id="modal-delete-form" method="post" action="" class="d-inline"
+                        onsubmit="return confirm('Are you sure you want to delete this wish?');">
+                        {% csrf_token %}
+                        <button type="submit" id="modal-delete-btn"
+                            class="btn btn-outline-danger border-opacity-25 px-3">
+                            <i class="bi bi-trash me-1"></i>Delete
+                        </button>
+                    </form>
+                    <button type="button" id="modal-edit-btn" class="btn btn-outline-info border-opacity-25 px-3">
+                        <i class="bi bi-pencil-square me-1"></i>Edit Wish
+                    </button>
+                    <button type="button" id="modal-save-btn" class="btn btn-premium d-none px-4">
+                        <i class="bi bi-cloud-arrow-up-fill me-1"></i>Save Changes
+                    </button>
+                    <button type="button" id="modal-cancel-edit-btn"
+                        class="btn btn-outline-light border-opacity-50 d-none">
+                        Cancel
+                    </button>
+                </div>
+                <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include Quill Library -->
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const modal = document.getElementById('wishDetailModal');
+        let bodyQuill = null;
+        let sigQuill = null;
+
+        // Context Data injection with safe handling
+        const templateMap = {};
+        {% for tp in templates %}
+        templateMap["{{ tp.pk }}"] = {
+            subject: "{{ tp.subject|escapejs }}",
+            body: "{{ tp.body|escapejs }}",
+            signatureId: "{{ tp.signature.id|default:'' }}"
+        };
+        {% endfor %}
+
+        // Real-time Search Logic
+        const searchInput = document.getElementById('wish-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                const query = this.value.toLowerCase();
+                document.querySelectorAll('.wish-row').forEach(row => {
+                    const text = row.innerText.toLowerCase();
+                    row.style.display = text.includes(query) ? '' : 'none';
+                });
+            });
+        }
+
+        // Helper to copy text
+        window.copyToClipboard = function (text, btn) {
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="bi bi-check-lg text-success"></i>';
+                setTimeout(() => { btn.innerHTML = originalHtml; }, 2000);
+            });
+        };
+
+        window.copyQuillBody = function (btn) {
+            if (bodyQuill) window.copyToClipboard(bodyQuill.getText(), btn);
+        };
+
+        function toggleEditMode(isEdit) {
+            const elements = {
+                view: document.getElementById('view-content-section'),
+                edit: document.getElementById('edit-content-section'),
+                sView: document.getElementById('detail-scheduled'),
+                sEdit: document.getElementById('edit-scheduled-group'),
+                ccView: document.getElementById('detail-cc'),
+                ccEdit: document.getElementById('edit-cc-group'),
+                bccView: document.getElementById('detail-bcc'),
+                bccEdit: document.getElementById('edit-bcc-group'),
+                editBtn: document.getElementById('modal-edit-btn'),
+                delBtn: document.getElementById('modal-delete-btn'),
+                saveBtn: document.getElementById('modal-save-btn'),
+                cancelBtn: document.getElementById('modal-cancel-edit-btn')
+            };
+
+            if (isEdit) {
+                elements.view.classList.add('d-none');
+                elements.edit.classList.remove('d-none');
+                elements.sView.classList.add('d-none');
+                elements.sEdit.classList.remove('d-none');
+                elements.ccView.classList.add('d-none');
+                elements.ccEdit.classList.remove('d-none');
+                elements.bccView.classList.add('d-none');
+                elements.bccEdit.classList.remove('d-none');
+                elements.editBtn.classList.add('d-none');
+                elements.delBtn.classList.add('d-none');
+                elements.saveBtn.classList.remove('d-none');
+                elements.cancelBtn.classList.remove('d-none');
+            } else {
+                elements.view.classList.remove('d-none');
+                elements.edit.classList.add('d-none');
+                elements.sView.classList.remove('d-none');
+                elements.sEdit.classList.add('d-none');
+                elements.ccView.classList.remove('d-none');
+                elements.ccEdit.classList.add('d-none');
+                elements.bccView.classList.remove('d-none');
+                elements.bccEdit.classList.add('d-none');
+                elements.delBtn.classList.remove('d-none');
+                elements.saveBtn.classList.add('d-none');
+                elements.cancelBtn.classList.add('d-none');
+                const status = document.getElementById('detail-status-badge').textContent;
+                if (status === 'Pending') elements.editBtn.classList.remove('d-none');
+            }
+        }
+
+        modal.addEventListener('show.bs.modal', function (event) {
+            const tr = event.relatedTarget;
+            if (!tr || !tr.getAttribute('data-wish-id')) return;
+
+            const d = {
+                id: tr.getAttribute('data-wish-id'),
+                patient: tr.getAttribute('data-patient'),
+                email: tr.getAttribute('data-email'),
+                tid: tr.getAttribute('data-template-id'),
+                tname: tr.getAttribute('data-template-name'),
+                subj: tr.getAttribute('data-subject'),
+                body: tr.getAttribute('data-body'),
+                status: tr.getAttribute('data-status'),
+                sched: tr.getAttribute('data-scheduled'),
+                schedIso: tr.getAttribute('data-scheduled-iso'),
+                sent: tr.getAttribute('data-sent'),
+                created: tr.getAttribute('data-created'),
+                cc: tr.getAttribute('data-cc') || '',
+                bcc: tr.getAttribute('data-bcc') || '',
+                phone: tr.getAttribute('data-phone') || '',
+                type: tr.getAttribute('data-template-type') || 'Email',
+                err: tr.getAttribute('data-error')
+            };
+
+            modal.setAttribute('data-current-wish-id', d.id);
+            toggleEditMode(false);
+
+            // Decode HTML utilities
+            const decode = (s) => {
+                if (!s) return "";
+                try { return s.replace(/\\u([0-9a-fA-F]{4})/g, (m, g) => String.fromCharCode(parseInt(g, 16))); } catch (e) { return s; }
+            };
+            const bodyHtml = decode(d.body);
+
+            // Fill UI
+            document.getElementById('detail-patient').textContent = d.patient;
+            document.getElementById('detail-email').textContent = d.email;
+            document.getElementById('detail-avatar').textContent = d.patient.charAt(0).toUpperCase();
+            document.getElementById('detail-template').textContent = d.tname;
+            document.getElementById('detail-subject').textContent = d.subj;
+            document.getElementById('modal-to-display').value = d.email || 'No Email';
+            document.getElementById('detail-body').innerHTML = bodyHtml;
+            document.getElementById('detail-scheduled').textContent = d.sched;
+            document.getElementById('detail-sent').textContent = d.sent;
+            document.getElementById('detail-created').textContent = d.created;
+            document.getElementById('detail-bcc').textContent = d.bcc || '-';
+
+            // Handle SMS vs Email specific fields
+            const toLabel = document.getElementById('modal-to-label');
+            const toIcon = document.getElementById('modal-to-icon');
+            const editSubGroup = document.getElementById('edit-subject-group');
+            const viewSubWrap = document.getElementById('detail-subject-wrapper');
+            const recpRow = document.getElementById('recipients-row');
+
+            if (d.type === 'SMS') {
+                toLabel.textContent = 'Recipient Phone';
+                toIcon.className = 'bi bi-phone';
+                document.getElementById('modal-to-display').value = d.phone || 'No Phone';
+                editSubGroup.classList.add('d-none');
+                viewSubWrap.classList.add('d-none');
+                recpRow.classList.add('d-none');
+            } else {
+                toLabel.textContent = 'To (Email)';
+                toIcon.className = 'bi bi-envelope';
+                document.getElementById('modal-to-display').value = d.email || 'No Email';
+                editSubGroup.classList.remove('d-none');
+                viewSubWrap.classList.remove('d-none');
+                recpRow.classList.remove('d-none');
+            }
+
+            // Edit Fields
+            document.getElementById('edit-template-select').value = d.tid;
+            document.getElementById('edit-subject').value = d.subj;
+            document.getElementById('edit-scheduled-for').value = d.schedIso;
+            document.getElementById('modal-delete-form').action = "{% url 'scheduled_delete' 0 %}".replace('0', d.id);
+
+            const ccArr = d.cc.split(',').map(s => s.trim().toLowerCase());
+            const bccArr = d.bcc.split(',').map(s => s.trim().toLowerCase());
+            document.querySelectorAll('.edit-cc-check').forEach(cb => cb.checked = ccArr.includes(cb.value.toLowerCase()));
+            document.querySelectorAll('.edit-bcc-check').forEach(cb => cb.checked = bccArr.includes(cb.value.toLowerCase()));
+
+            // Status & Errors
+            const badge = document.getElementById('detail-status-badge');
+            badge.textContent = d.status;
+            badge.className = 'badge fs-6';
+            if (d.status === 'Pending') {
+                badge.classList.add('bg-warning', 'bg-opacity-25', 'text-warning', 'border', 'border-warning', 'border-opacity-25');
+                document.getElementById('modal-edit-btn').classList.remove('d-none');
+            } else {
+                const cls = d.status === 'Sent' ? 'success' : 'danger';
+                badge.classList.add(`bg-${cls}`, 'bg-opacity-25', `text-${cls}`, 'border', `border-${cls}`, 'border-opacity-25');
+                document.getElementById('modal-edit-btn').classList.add('d-none');
+            }
+
+            const errCont = document.getElementById('detail-error-container');
+            if (d.err && d.err.trim()) {
+                errCont.classList.remove('d-none');
+                document.getElementById('detail-error').textContent = d.err;
+            } else {
+                errCont.classList.add('d-none');
+            }
+
+            // Quill Init
+            const toolbar = [['bold', 'italic', 'underline'], [{ 'list': 'ordered' }, { 'list': 'bullet' }], [{ 'color': [] }, { 'background': [] }], ['clean']];
+            if (!bodyQuill) {
+                bodyQuill = new Quill('#edit-quill-body', { theme: 'snow', modules: { toolbar } });
+                bodyQuill.on('text-change', () => document.getElementById('edit-body-hidden').value = bodyQuill.root.innerHTML);
+            }
+            if (!sigQuill) {
+                sigQuill = new Quill('#edit-quill-signature', { theme: 'snow', modules: { toolbar } });
+                sigQuill.on('text-change', () => document.getElementById('edit-signature-hidden').value = sigQuill.root.innerHTML);
+            }
+
+            bodyQuill.root.innerHTML = bodyHtml;
+            document.getElementById('edit-body-hidden').value = bodyHtml;
+            document.getElementById('edit-signature-select').value = "";
+            sigQuill.root.innerHTML = "";
+            document.getElementById('edit-signature-hidden').value = "";
+        });
+
+        document.getElementById('edit-template-select').addEventListener('change', function () {
+            const data = templateMap[this.value];
+            if (data) {
+                document.getElementById('edit-subject').value = data.subject;
+                bodyQuill.root.innerHTML = data.body;
+                document.getElementById('edit-body-hidden').value = data.body;
+                if (data.signatureId) {
+                    const sel = document.getElementById('edit-signature-select');
+                    sel.value = data.signatureId;
+                    sel.dispatchEvent(new Event('change'));
+                }
+            }
+        });
+
+        document.getElementById('edit-signature-select').addEventListener('change', function () {
+            const html = this.options[this.selectedIndex].getAttribute('data-content') || '';
+            sigQuill.root.innerHTML = html;
+            document.getElementById('edit-signature-hidden').value = html;
+        });
+
+        document.getElementById('modal-edit-btn').addEventListener('click', () => toggleEditMode(true));
+        document.getElementById('modal-cancel-edit-btn').addEventListener('click', () => toggleEditMode(false));
+
+        document.getElementById('modal-save-btn').addEventListener('click', function () {
+            const id = modal.getAttribute('data-current-wish-id');
+            const cc = Array.from(document.querySelectorAll('.edit-cc-check:checked')).map(c => c.value).join(', ');
+            const bcc = Array.from(document.querySelectorAll('.edit-bcc-check:checked')).map(c => c.value).join(', ');
+
+            this.disabled = true;
+            const original = this.innerHTML;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+
+            const form = new FormData();
+            form.append('scheduled_for', document.getElementById('edit-scheduled-for').value);
+            form.append('custom_subject', document.getElementById('edit-subject').value);
+
+            let body = document.getElementById('edit-body-hidden').value;
+            const sig = document.getElementById('edit-signature-hidden').value;
+            if (sig && !body.includes(sig)) body += "<br><br>" + sig;
+
+            form.append('custom_body', body);
+            form.append('cc_recipients', cc);
+            form.append('bcc_recipients', bcc);
+            form.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+            fetch(`/scheduled/update-ajax/${id}/`, { method: 'POST', body: form })
+                .then(r => r.json()).then(res => {
+                    if (res.status === 'success') location.reload();
+                    else { alert('Error: ' + res.message); this.disabled = false; this.innerHTML = original; }
+                })
+                .catch(e => { alert('An error occurred.'); this.disabled = false; this.innerHTML = original; });
+        });
+
+        const clockEl = document.getElementById('california-clock');
+        if (clockEl) {
+            setInterval(() => {
+                clockEl.textContent = new Intl.DateTimeFormat('en-US', {
+                    timeZone: 'America/Los_Angeles', weekday: 'short', year: 'numeric', month: 'short', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                }).format(new Date());
+            }, 1000);
+        }
+    });
+</script>
+{% endblock %}

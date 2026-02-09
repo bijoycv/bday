@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+
+{% block title %}Saved Recipients | Proceed{% endblock %}
+
+{% block extra_css %}
+{% include 'components/premium_styles.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">Saved Recipients</h2>
+        <p class="text-muted small">Manage CC and BCC recipients for your birthday wishes.</p>
+    </div>
+    <a href="{% url 'recipient_create' %}" class="btn btn-premium">
+        <i class="bi bi-plus-lg"></i> Add New Recipient
+    </a>
+</div>
+
+{% if messages %}
+{% for message in messages %}
+<div class="alert alert-{{ message.tags }} alert-dismissible fade show glass-card border-0 text-white" role="alert"
+    style="background: {% if message.tags == 'success' %}rgba(16, 185, 129, 0.2){% else %}rgba(244, 63, 94, 0.2){% endif %};">
+    {{ message }}
+    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="glass-card overflow-hidden">
+    <div class="table-responsive">
+        <table class="table table-custom table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th class="ps-4">Name</th>
+                    <th>Email</th>
+                    <th>Type</th>
+                    <th>Default</th>
+                    <th class="text-end pe-4">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for recipient in recipients %}
+                <tr>
+                    <td class="ps-4">
+                        <span class="text-white fw-medium">{{ recipient.name }}</span>
+                    </td>
+                    <td>
+                        <span class="text-white-50">{{ recipient.email }}</span>
+                    </td>
+                    <td>
+                        <span
+                            class="badge {% if recipient.recipient_type == 'CC' %}bg-primary{% else %}bg-info{% endif %} bg-opacity-25 text-white border border-white border-opacity-10">
+                            {{ recipient.recipient_type }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if recipient.is_default %}
+                        <span
+                            class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25 px-2">
+                            <i class="bi bi-check2-circle me-1"></i> Default
+                        </span>
+                        {% else %}
+                        <span class="text-muted small">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end pe-4">
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'recipient_update' pk=recipient.pk %}" class="btn btn-icon btn-soft-warning"
+                                title="Edit">
+                                <i class="bi bi-pencil-fill"></i>
+                            </a>
+                            <a href="{% url 'recipient_delete' pk=recipient.pk %}" class="btn btn-icon btn-soft-danger"
+                                title="Delete">
+                                <i class="bi bi-trash-fill"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-5 text-muted">
+                        No saved recipients found. <a href="{% url 'recipient_create' %}" class="text-primary">Add
+                            one</a> to get started.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
