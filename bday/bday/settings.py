@@ -37,8 +37,12 @@ SECRET_KEY = 'django-insecure-734wzxaz*7bz488(d#hcx*7dkiaaxr54m$wl!ibn^xdxc*(mgt
 
 # SECURITY WARNING: don't run with debug turned on in production!
 if ENVIRONMENT == 'production':
-    DEBUG = False
-    ALLOWED_HOSTS = ["*"]  # Replace with actual domain in production
+    DEBUG = True
+    ALLOWED_HOSTS = ["*",
+        "192.168.1.50",
+        "localhost",
+        "127.0.0.1"
+    ]  # Replace with actual domain in production
 else:
     DEBUG = True
     ALLOWED_HOSTS = [
