@@ -23,7 +23,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Environment Detection: 'development' or 'production'
 # Set ENVIRONMENT=production in docker-compose for server
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
-SITE_URL = os.getenv('SITE_URL', 'http://127.0.0.1:8082')
+
+if ENVIRONMENT == 'production':
+    SITE_URL = os.getenv('SERVER_SITE_URL', 'http://192.168.1.50:8002')
+else:
+    SITE_URL = os.getenv('SITE_URL', 'http://127.0.0.1:8082')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -97,11 +101,11 @@ if ENVIRONMENT == 'production':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME', 'bday'),
-            'USER': os.getenv('DB_USER', 'Sivahpdb'),
-            'PASSWORD': os.getenv('DB_PASSWORD', ''),
-            'HOST': os.getenv('DB_HOST', 'postgres-db'),
-            'PORT': os.getenv('DB_PORT', '5432'),
+            'NAME': os.getenv('SERVER_DB_NAME', 'bday'),
+            'USER': os.getenv('SERVER_DB_USER', 'Sivahpdb'),
+            'PASSWORD': os.getenv('SERVER_DB_PASSWORD', ''),
+            'HOST': os.getenv('SERVER_DB_HOST', 'postgres-db'),
+            'PORT': os.getenv('SERVER_DB_PORT', '5432'),
         }
     }
     # Celery Configuration for Production (Docker Redis)
