@@ -3,12 +3,12 @@ import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 def create_database():
-    # Use SERVER_ prefixed vars (production/Docker), fall back to DB_ vars
-    dbname = os.getenv('SERVER_DB_NAME') or os.getenv('DB_NAME', 'bday')
-    user = os.getenv('SERVER_DB_USER') or os.getenv('DB_USER', 'Sivahpdb')
-    password = os.getenv('SERVER_DB_PASSWORD') or os.getenv('DB_PASSWORD', '')
-    host = os.getenv('SERVER_DB_HOST') or os.getenv('DB_HOST', 'postgres-db')
-    port = os.getenv('SERVER_DB_PORT') or os.getenv('DB_PORT', '5432')
+    # Use POSTGRES_ prefixed vars (production/Docker), fall back to DB_ vars
+    dbname = os.getenv('POSTGRES_DB') or os.getenv('DB_NAME', 'bday')
+    user = os.getenv('POSTGRES_USER') or os.getenv('DB_USER', 'Sivahpdb')
+    password = os.getenv('POSTGRES_PASSWORD') or os.getenv('DB_PASSWORD', '')
+    host = os.getenv('POSTGRES_HOST') or os.getenv('DB_HOST', 'postgres-db')
+    port = os.getenv('POSTGRES_PORT') or os.getenv('DB_PORT', '5432')
 
     try:
         # Connect to default 'postgres' database to create the new one

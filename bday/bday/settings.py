@@ -101,11 +101,11 @@ if ENVIRONMENT == 'production':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('SERVER_DB_NAME', 'bday'),
-            'USER': os.getenv('SERVER_DB_USER', 'Sivahpdb'),
-            'PASSWORD': os.getenv('SERVER_DB_PASSWORD', ''),
-            'HOST': os.getenv('SERVER_DB_HOST', 'postgres-db'),
-            'PORT': os.getenv('SERVER_DB_PORT', '5432'),
+            'NAME': os.getenv('POSTGRES_DB', 'bday'),
+            'USER': os.getenv('POSTGRES_USER', 'Sivahpdb'),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''),
+            'HOST': os.getenv('POSTGRES_HOST', 'postgres-db'),
+            'PORT': os.getenv('POSTGRES_PORT', '5432'),
         }
     }
     # Celery Configuration for Production (Docker Redis)
