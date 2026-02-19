@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Outreach Summary</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.5;
+            color: #1a202c;
+            margin: 0;
+            padding: 0;
+            background-color: #ffffff;
+        }
+
+        .wrapper {
+            width: 100%;
+            background-color: #f7fafc;
+            padding: 40px 0;
+        }
+
+        .container {
+            max-width: 650px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .header {
+            padding: 30px 40px 10px 40px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #2d3748;
+            margin: 0;
+            border-bottom: 2px solid #6366f1;
+            display: inline-block;
+            padding-bottom: 4px;
+        }
+
+        .content {
+            padding: 30px 40px;
+        }
+
+        .greeting {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: #2d3748;
+        }
+
+        .intro-text {
+            font-size: 15px;
+            color: #4a5568;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        /* Summary Table */
+        .summary-box {
+            background-color: #f8fafc;
+            border: 1px solid #edf2f7;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .summary-table td {
+            padding: 8px 0;
+        }
+
+        .summary-label {
+            font-size: 14px;
+            color: #718096;
+            width: 60%;
+        }
+
+        .summary-value {
+            font-size: 15px;
+            font-weight: 600;
+            color: #2d3748;
+            text-align: right;
+        }
+
+        .summary-value.success {
+            color: #38a169;
+        }
+
+        .summary-value.error {
+            color: #e53e3e;
+        }
+
+        /* Main Records Table */
+        .section-title {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #718096;
+            margin-bottom: 12px;
+            margin-top: 10px;
+        }
+
+        .record-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+
+        .record-table th {
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #a0aec0;
+            text-transform: uppercase;
+            padding: 10px 12px;
+            border-bottom: 1px solid #edf2f7;
+            background-color: #fcfcfd;
+        }
+
+        .record-table td {
+            padding: 12px;
+            font-size: 14px;
+            border-bottom: 1px solid #edf2f7;
+            color: #4a5568;
+        }
+
+        .record-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .name-cell {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-email {
+            background-color: #ebf4ff;
+            color: #3182ce;
+        }
+
+        .badge-sms {
+            background-color: #faf5ff;
+            color: #805ad5;
+        }
+
+        .badge-failed {
+            background-color: #fff5f5;
+            color: #c53030;
+        }
+
+        .time-cell {
+            color: #a0aec0;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .footer {
+            padding: 30px 40px;
+            background-color: #fcfcfd;
+            border-top: 1px solid #edf2f7;
+            text-align: center;
+        }
+
+        .footer p {
+            font-size: 12px;
+            color: #a0aec0;
+            margin: 0;
+        }
+
+        .view-all-link {
+            display: inline-block;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #6366f1;
+            text-decoration: none;
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrapper">
+        <div class="container">
+            <div class="header">
+                <h1>Engagement Summary</h1>
+            </div>
+
+            <div class="content">
+                <p class="greeting">Good morning,</p>
+                <p class="intro-text">
+                    This is your automated engagement report for <strong>{{ date|date:"l, F j, Y" }}</strong>.
+                    The scheduled birthday outreach has been processed. Here is the delivery performance breakdown for
+                    your review.
+                </p>
+
+                <div class="summary-box">
+                    <table class="summary-table">
+                        <tr>
+                            <td class="summary-label">Total Recipients Processed</td>
+                            <td class="summary-value">{{ total_sent|add:total_failed }}</td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label">Successful Deliveries</td>
+                            <td class="summary-value success">{{ total_sent }}</td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label">Delivery Failures</td>
+                            <td class="summary-value {% if total_failed > 0 %}error{% endif %}">{{ total_failed }}</td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label">Email Outreach</td>
+                            <td class="summary-value">{{ emails_count }}</td>
+                        </tr>
+                        <tr>
+                            <td class="summary-label">SMS Outreach</td>
+                            <td class="summary-value">{{ sms_count }}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="section-title">Delivery Details</div>
+                <table class="record-table">
+                    <thead>
+                        <tr>
+                            <th>Patient</th>
+                            <th>Method</th>
+                            <th style="text-align: right;">Time Sent</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in activities %}
+                        <tr>
+                            <td class="name-cell">
+                                {{ item.patient.first_name }} {{ item.patient.last_name }}
+                                <div style="font-size: 11px; font-weight: normal; color: #a0aec0; margin-top: 2px;">
+                                    {{ item.patient.membership_plan|default:"Standard Plan" }}
+                                </div>
+                            </td>
+                            <td>
+                                <span
+                                    class="type-badge {% if item.activity_type == 'Email Sent' %}badge-email{% else %}badge-sms{% endif %}">
+                                    {{ item.activity_type }}
+                                </span>
+                            </td>
+                            <td class="time-cell" style="text-align: right;">
+                                {{ item.created_at|date:"M d, h:i A" }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" style="text-align: center; color: #a0aec0; padding: 30px;">
+                                No successful deliveries recorded for this window.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% if failures %}
+                <div class="section-title" style="color: #e53e3e;">Delivery Exceptions</div>
+                <table class="record-table">
+                    <thead>
+                        <tr>
+                            <th>Patient</th>
+                            <th>Status</th>
+                            <th style="text-align: right;">Issue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in failures %}
+                        <tr>
+                            <td class="name-cell">{{ f.patient.first_name }} {{ f.patient.last_name }}</td>
+                            <td><span class="type-badge badge-failed">FAIL</span></td>
+                            <td style="font-size: 12px; color: #a0aec0; text-align: right;">
+                                {{ f.error_message|truncatechars:40 }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+
+                <div style="text-align: center;">
+                    <a href="{{ site_url }}/scheduled/" class="view-all-link">Access Full Engagement Portal
+                        &rarr;</a>
+                </div>
+            </div>
+
+            <div class="footer">
+                <p>This is a confidential automated report generated by the Implants Guru Engagement System.</p>
+                <p style="margin-top: 8px;">&copy; {{ date|date:"Y" }} Implants Guru Dashboard</p>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -23,6 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Environment Detection: 'development' or 'production'
 # Set ENVIRONMENT=production in docker-compose for server
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
+SITE_URL = os.getenv('SITE_URL', 'http://127.0.0.1:8082')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -79,6 +80,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'birthday.context_processors.todays_birthdays_popup',
             ],
         },
     },
@@ -173,6 +175,7 @@ EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+EMAIL_FROM_NAME = os.getenv('EMAIL_FROM_NAME', 'Dr. Keerthi Senthil')
 
 
 # Data Upload Limits (Increased for bulk patient imports)
@@ -187,10 +190,12 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
-# Celery Beat Schedule (runs every 15 minutes)
+# Celery Beat Schedule
+from celery.schedules import crontab
+
 CELERY_BEAT_SCHEDULE = {
-    'send-scheduled-wishes-every-15-minutes': {
+    'send-scheduled-wishes-every-2-minutes': {
         'task': 'birthday.tasks.send_scheduled_wishes_task',
-        'schedule': 900.0,  # 15 minutes
+        'schedule': 120.0,  # 2 minutes (TEMP for testing, change to 900 for production)
     },
 }

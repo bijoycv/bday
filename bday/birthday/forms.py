@@ -5,25 +5,27 @@ class PatientForm(forms.ModelForm):
     class Meta:
         model = Patient
         fields = '__all__'
-        exclude = ['created_at', 'updated_at']
+        exclude = ['created_at', 'updated_at', 'unsubscribed_at']
         widgets = {
             'dob': forms.DateInput(attrs={'type': 'date', 'class': 'form-control', 'placeholder': 'Date of Birth'}),
-            'enrollment_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control', 'placeholder': 'Enrollment Date'}),
+            'enrollment_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'first_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'First Name'}),
             'middle_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Middle Name'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Last Name'}),
             'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Phone Number'}),
             'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Email Address'}),
-            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Street Address'}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Full Address...'}),
             'city': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'City'}),
             'state': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'State'}),
             'zip_code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Zip Code'}),
             'gender': forms.Select(attrs={'class': 'form-select'}),
-            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Notes / Additional Info'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Extra notes...'}),
             'membership_plan': forms.Select(attrs={'class': 'form-select'}),
             'patient_type': forms.Select(attrs={'class': 'form-select'}),
             'payment_method': forms.Select(attrs={'class': 'form-select'}),
             'is_verified': forms.CheckboxInput(attrs={'class': 'form-check-input', 'style': 'width: 1.5em; height: 1.5em;'}),
+            'accepts_marketing': forms.CheckboxInput(attrs={'class': 'form-check-input', 'style': 'width: 1.5em; height: 1.5em;'}),
+            'unsubscribe_reason': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Reason for opting out...'}),
         }
 
 class MultipleFileInput(forms.ClearableFileInput):

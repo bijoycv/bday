@@ -210,6 +210,7 @@ def generate_report(request):
 
 from django.core.mail import EmailMessage
 from django.conf import settings
+from email.utils import formataddr
 
 def send_report_email(period='weekly', report_type='birthday', recipient_list=None):
     """Function to send the report as an HTML email."""
@@ -230,7 +231,7 @@ def send_report_email(period='weekly', report_type='birthday', recipient_list=No
     email = EmailMessage(
         subject,
         html_content,
-        settings.DEFAULT_FROM_EMAIL,
+        formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL)),
         recipient_list
     )
     email.content_subtype = "html"
@@ -275,3 +276,108 @@ def mark_outreach_status(request):
         ).delete()
             
     return JsonResponse({'status': 'success'})
+
+def get_daily_outreach_data(patient_ids=None):
+    """Get metrics and activities for today's outreach or specific IDs."""
+    today = timezone.localdate()
+    
+    start_of_day = timezone.make_aware(datetime.combine(today, datetime.min.time()))
+    
+    if patient_ids:
+        # Focus specifically on the patients just processed, but only for today
+        activities = PatientStatus.objects.filter(
+            activity_type__in=['Email Sent', 'SMS Sent'],
+            patient_id__in=patient_ids,
+            created_at__gte=start_of_day
+        ).order_by('-created_at').select_related('patient')
+        
+        failures = ScheduledWish.objects.filter(
+            status='Failed',
+            patient_id__in=patient_ids,
+            updated_at__gte=start_of_day
+        ).order_by('-updated_at').select_related('patient')
+    else:
+        # Fallback to today's activity
+        activities = PatientStatus.objects.filter(
+            activity_type__in=['Email Sent', 'SMS Sent'],
+            created_at__gte=start_of_day
+        ).order_by('-created_at').select_related('patient')
+        
+        failures = ScheduledWish.objects.filter(
+            status='Failed',
+            updated_at__gte=start_of_day
+        ).order_by('-updated_at').select_related('patient')
+    
+    emails_count = activities.filter(activity_type='Email Sent').count()
+    sms_count = activities.filter(activity_type='SMS Sent').count()
+    
+    return {
+        'date': today,
+        'activities': list(activities), # Convert to list for template stability
+        'failures': list(failures),     # Convert to list for template stability
+        'total_sent': activities.count(),
+        'total_failed': failures.count(),
+        'emails_count': emails_count,
+        'sms_count': sms_count,
+        'site_url': settings.SITE_URL,
+    }
+
+def send_daily_summary_report(recipient_list=None, patient_ids=None):
+    """Send the daily CEO summary report."""
+    print(f"Preparing summary report (Patient IDs: {patient_ids})...")
+    if not recipient_list:
+        recipient_list = ["bijoy@sivasolutions.com"]
+        
+    context = get_daily_outreach_data(patient_ids=patient_ids)
+    print(f"Report metrics: Sent={context['total_sent']}, Failed={context['total_failed']}")
+    
+    if context['total_sent'] == 0 and context['total_failed'] == 0:
+        print("No activity to report today. Skipping email.")
+        return False
+        
+    try:
+        template = 'birthday/emails/daily_summary_email.html'
+        html_content = render_to_string(template, context)
+        
+        subject = f"Daily Outreach Summary - {context['date'].strftime('%b %d, %Y')}"
+        
+        email = EmailMessage(
+            subject=subject,
+            body=html_content,
+            from_email=formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL)),
+            to=recipient_list
+        )
+        email.content_subtype = "html"
+        email.send(fail_silently=False)
+        print(f"Report emailed successfully to {recipient_list}")
+        return True
+    except Exception as e:
+        print(f"ERROR: Failed to send daily summary report: {str(e)}")
+        return False
+
+def email_daily_summary_trigger(request):
+    """View trigger to manually test the daily summary report."""
+    recipient = request.GET.get('email', "bijoy@sivasolutions.com")
+    success = send_daily_summary_report([recipient])
+    
+    if success:
+        return JsonResponse({'status': 'success', 'message': f'Daily summary sent to {recipient}'})
+    else:
+        # Check if they want to send it even if empty
+        force = request.GET.get('force') == 'true'
+        if force:
+            context = get_daily_outreach_data()
+            template = 'birthday/emails/daily_summary_email.html'
+            html_content = render_to_string(template, context)
+            subject = f"Daily Outreach Summary (Manual) - {context['date'].strftime('%b %d, %Y')}"
+            email = EmailMessage(
+                subject,
+                html_content,
+                formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL)),
+                [recipient]
+            )
+            email.content_subtype = "html"
+            email.send()
+            return JsonResponse({'status': 'success', 'message': f'Forced daily summary sent to {recipient}'})
+        
+        return JsonResponse({'status': 'error', 'message': 'No activity today to report. Use force=true to send anyway.'})

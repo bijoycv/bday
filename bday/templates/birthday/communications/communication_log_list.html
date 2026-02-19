@@ -143,8 +143,7 @@
                         <span class="page-link">{{ num }}</span>
                     </li>
                     {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %} <li class="page-item">
-                        <a class="page-link" href="?page={{ num }}&channel={{ channel }}&status={{ status }}">{{ num
-                            }}</a>
+                        <a class="page-link" href="?page={{ num }}&channel={{ channel }}&status={{ status }}">{{ num }}</a>
                         </li>
                         {% endif %}
                         {% endfor %}

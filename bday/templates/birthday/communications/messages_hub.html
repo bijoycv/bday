@@ -1,0 +1,350 @@
+{% extends 'base.html' %}
+
+{% block title %}Messages | Proceed{% endblock %}
+
+{% block extra_css %}
+<style>
+    .msg-shell {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 16px;
+    }
+
+    .msg-panel {
+        background: linear-gradient(145deg, rgba(20, 32, 58, 0.86), rgba(13, 22, 43, 0.9));
+        border: 1px solid rgba(109, 130, 197, 0.17);
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(2, 7, 20, 0.45);
+        backdrop-filter: blur(8px);
+    }
+
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .metric-box {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: rgba(10, 18, 35, 0.55);
+    }
+
+    .thread-list {
+        max-height: 75vh;
+        overflow-y: auto;
+    }
+
+    .thread-item {
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        background: rgba(10, 19, 38, 0.62);
+    }
+
+    .thread-item.active-thread {
+        border-color: rgba(0, 238, 255, 0.45);
+        background: linear-gradient(140deg, rgba(0, 161, 255, 0.16), rgba(79, 70, 229, 0.2));
+        box-shadow: inset 0 0 0 1px rgba(0, 238, 255, 0.22);
+    }
+
+    .direction-pill {
+        font-size: 0.62rem;
+        letter-spacing: 0.35px;
+        padding: 0.22rem 0.5rem;
+        border-radius: 999px;
+        font-weight: 600;
+    }
+
+    .bubble-out {
+        background: linear-gradient(150deg, rgba(59, 130, 246, 0.3), rgba(79, 70, 229, 0.2));
+        border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+
+    .bubble-in {
+        background: rgba(15, 76, 71, 0.35);
+        border: 1px solid rgba(45, 212, 191, 0.32);
+    }
+
+    .feed-table-wrap {
+        max-height: 360px;
+        overflow: auto;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .feed-table th {
+        position: sticky;
+        top: 0;
+        background: linear-gradient(90deg, rgba(63, 81, 181, 0.95), rgba(126, 87, 194, 0.95));
+        z-index: 1;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+    }
+
+    .feed-table td {
+        font-size: 0.86rem;
+        background: rgba(9, 15, 30, 0.65);
+        border-color: rgba(255, 255, 255, 0.05);
+        color: #e2e8f0;
+        vertical-align: middle;
+    }
+
+    .feed-status {
+        border-radius: 999px;
+        padding: 0.2rem 0.55rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    .btn-new-msg {
+        border-radius: 999px;
+        padding: 0.65rem 1.2rem;
+        font-weight: 700;
+        background: #0b0f18;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #fff;
+    }
+
+    .btn-new-msg:hover {
+        background: #111827;
+        color: #fff;
+        border-color: rgba(88, 101, 242, 0.6);
+    }
+
+    @media (max-width: 1200px) {
+        .msg-shell {
+            grid-template-columns: 1fr;
+        }
+
+        .thread-list {
+            max-height: 42vh;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .metric-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h2 class="fw-bold mb-1">Messages Command Center</h2>
+        <p class="text-white-50 mb-0">Live Twilio stream, patient conversations, and direct send.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <button type="button" class="btn btn-new-msg" data-bs-toggle="modal" data-bs-target="#newMessageModal">
+            <i class="bi bi-plus-lg me-2"></i>New Message
+        </button>
+        <div class="msg-panel px-3 py-2 small">
+            <span class="text-white-50">Twilio Number:</span>
+            <span class="fw-bold text-info ms-2">{{ twilio_number|default:"Not configured" }}</span>
+        </div>
+    </div>
+</div>
+
+<div class="metric-grid mb-3">
+    <div class="metric-box">
+        <div class="text-white-50 small">Sent Today</div>
+        <div class="fs-4 fw-bold">{{ sent_today }}</div>
+    </div>
+    <div class="metric-box">
+        <div class="text-white-50 small">Received Today</div>
+        <div class="fs-4 fw-bold">{{ received_today }}</div>
+    </div>
+    <div class="metric-box">
+        <div class="text-white-50 small">Delivered</div>
+        <div class="fs-4 fw-bold text-success">{{ delivered_today }}</div>
+    </div>
+    <div class="metric-box">
+        <div class="text-white-50 small">Failed</div>
+        <div class="fs-4 fw-bold text-danger">{{ failed_today }}</div>
+    </div>
+</div>
+
+<div class="msg-shell">
+    <aside class="msg-panel p-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0 text-uppercase text-white-50 small">Conversations</h6>
+            <span class="badge bg-info bg-opacity-25 text-info">{{ threads|length }}</span>
+        </div>
+        <div class="thread-list">
+            {% for thread in threads %}
+            <a href="{{ thread.url }}"
+                class="thread-item {% if selected_thread_key == thread.key %}active-thread{% endif %} d-block text-decoration-none p-3 mb-2">
+                <div class="d-flex justify-content-between gap-2">
+                    <div class="fw-semibold text-white">{{ thread.display_name }}</div>
+                    <small class="text-white-50">{{ thread.last_message_at|date:"M d, h:i A" }}</small>
+                </div>
+                <small class="text-info d-block mt-1">{{ thread.phone }}</small>
+                <small class="text-white-50 d-block mt-1">{{ thread.last_preview|default:"No recent preview" }}</small>
+                <div class="mt-2">
+                    <span class="badge bg-secondary bg-opacity-50">{{ thread.total_messages }} msg{{ thread.total_messages|pluralize }}</span>
+                </div>
+            </a>
+            {% empty %}
+            <div class="text-center text-white-50 py-5">
+                <i class="bi bi-chat-left-dots fs-2 d-block mb-2"></i>
+                No linked patient threads yet.
+            </div>
+            {% endfor %}
+        </div>
+    </aside>
+
+    <section class="d-flex flex-column gap-3">
+        <div class="msg-panel p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="text-uppercase text-white-50 small mb-0">Conversation Timeline</h6>
+                {% if selected_patient %}
+                <div class="small">
+                    <span class="fw-semibold">{{ selected_patient.first_name }} {{ selected_patient.last_name }}</span>
+                    <span class="text-white-50 ms-2">{{ selected_patient.phone }}</span>
+                </div>
+                {% elif selected_phone %}
+                <div class="small">
+                    <span class="fw-semibold">Number</span>
+                    <span class="text-white-50 ms-2">{{ selected_phone }}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <div style="max-height: 42vh; overflow-y: auto;">
+                {% if selected_patient or selected_phone %}
+                    {% for msg in conversation %}
+                    <div class="d-flex mb-2 {% if msg.direction == 'Outbound' %}justify-content-end{% else %}justify-content-start{% endif %}">
+                        <div class="{% if msg.direction == 'Outbound' %}bubble-out{% else %}bubble-in{% endif %} rounded-3 p-3" style="max-width: 82%;">
+                            <div class="mb-2">{{ msg.body|linebreaksbr }}</div>
+                            <div class="d-flex justify-content-between align-items-center gap-2">
+                                <div class="small text-white-50">{{ msg.created_at|date:"Y-m-d h:i:s A" }}</div>
+                                <div class="d-flex gap-1 align-items-center">
+                                    <span class="direction-pill {% if msg.direction == 'Outbound' %}bg-info text-dark{% else %}bg-success text-dark{% endif %}">{{ msg.direction }}</span>
+                                    <span class="direction-pill bg-secondary bg-opacity-75 text-white">{{ msg.source }}</span>
+                                </div>
+                            </div>
+                            <div class="small text-white-50 mt-1">
+                                {{ msg.from_number }} <i class="bi bi-arrow-right mx-1"></i> {{ msg.to_number }}{% if msg.status %} | {{ msg.status }}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-white-50 text-center py-5">No messages in this timeline.</div>
+                    {% endfor %}
+                {% else %}
+                <div class="text-white-50 text-center py-5">Select a conversation on the left or create new message.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="msg-panel p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="text-uppercase text-white-50 small mb-0">Recent Twilio Feed</h6>
+                <span class="text-white-50 small">Latest {{ twilio_feed|length }} records</span>
+            </div>
+
+            {% if twilio_fetch_error %}
+            <div class="alert alert-warning py-2 px-3 mb-3">
+                <i class="bi bi-exclamation-triangle me-2"></i>{{ twilio_fetch_error }}
+            </div>
+            {% endif %}
+
+            <div class="feed-table-wrap">
+                <table class="table feed-table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Body</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in twilio_feed %}
+                        <tr>
+                            <td>{{ row.created_at|date:"Y-m-d H:i:s" }}</td>
+                            <td>{{ row.from_number }}</td>
+                            <td>{{ row.to_number }}</td>
+                            <td>{{ row.body|truncatechars:130 }}</td>
+                            <td>
+                                <span class="feed-status {% if row.status|lower == 'failed' or row.status|lower == 'undelivered' %}bg-danger text-white{% elif row.status|lower == 'delivered' or row.status|lower == 'sent' %}bg-success text-white{% else %}bg-secondary text-white{% endif %}">
+                                    {{ row.status|default:"Unknown" }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-white-50 py-4">No Twilio messages found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</div>
+
+<div class="modal fade" id="newMessageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content msg-panel">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold">New Message</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form method="get" action="{% url 'messages_hub' %}" class="row g-2 mb-3">
+                    <div class="col-md-9">
+                        <input type="text" name="lookup" class="form-control" placeholder="Enter contact number to find existing conversation" value="{{ phone_lookup }}">
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-outline-info w-100" type="submit">Find Conversation</button>
+                    </div>
+                </form>
+
+                {% if phone_lookup %}
+                <div class="alert alert-info py-2">
+                    {% if found_patient_for_lookup %}
+                    Existing number found: <strong>{{ found_patient_for_lookup.first_name }} {{ found_patient_for_lookup.last_name }}</strong>.
+                    <a href="{% url 'messages_hub' %}?patient={{ found_patient_for_lookup.id }}" class="ms-2">Open thread</a>
+                    {% elif lookup_phone_normalized %}
+                    No existing conversation found for <strong>{{ lookup_phone_normalized }}</strong>. You can send a new message below.
+                    {% else %}
+                    Please enter a valid number.
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <form method="post" action="{% url 'send_direct_sms' %}" class="row g-2">
+                    {% csrf_token %}
+                    <div class="col-md-6">
+                        <label class="form-label small text-white-50">Select Patient (optional)</label>
+                        <select class="form-select" name="patient_id">
+                            <option value="">Search/select patient...</option>
+                            {% for p in selectable_patients %}
+                            <option value="{{ p.id }}">
+                                {{ p.first_name }} {{ p.last_name }} - {{ p.phone }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-white-50">New/Direct Number</label>
+                        <input type="text" name="phone_number" class="form-control" placeholder="+17601234567" value="{{ lookup_phone_normalized }}">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small text-white-50">Message</label>
+                        <textarea name="message_body" rows="4" class="form-control" maxlength="1000" placeholder="Type your message..." required></textarea>
+                    </div>
+                    <div class="col-12 d-flex justify-content-end">
+                        <button type="submit" class="btn btn-premium"><i class="bi bi-send-fill me-1"></i>Send Message</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

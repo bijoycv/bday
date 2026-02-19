@@ -42,16 +42,6 @@
     </div>
 </div>
 
-{% if messages %}
-{% for message in messages %}
-<div class="alert alert-{{ message.tags }} alert-dismissible fade show glass-card border-0 text-white" role="alert"
-    style="background: {% if message.tags == 'success' %}rgba(16, 185, 129, 0.2){% else %}rgba(244, 63, 94, 0.2){% endif %};">
-    {{ message }}
-    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
-</div>
-{% endfor %}
-{% endif %}
-
 <!-- Sort, Search & Bulk Actions -->
 <div class="glass-card p-3 mb-4">
     <div class="row align-items-center g-3">
@@ -74,20 +64,7 @@
                 </div>
 
 
-                <select name="month" id="month_select" class="form-select w-auto" style="min-width: 140px;">
-                    <option value="">All Months</option>
-                    {% for m_num, m_name in months %}
-                    <option value="{{ m_num }}" {% if month_filter|add:"0" == m_num %}selected{% endif %}>{{ m_name }}
-                    </option>
-                    {% endfor %}
-                </select>
-
-                <select name="per_page" id="per_page_select" class="form-select w-auto">
-                    <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
-                    <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
-                    <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                    <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-                </select>
+                {% include 'birthday/partials/_patient_list_filters.html' %}
 
                 {% if search_query or month_filter or status_filter or plan_filter or patient_type_filter %}
                 <a href="{% url 'patient_list' %}" class="btn btn-outline-light" title="Clear Filters">
@@ -289,7 +266,7 @@
                     </thead>
                     <tbody>
                         {% for patient in patients %}
-                        <tr>
+                        <tr class="{% if patient.has_pending_wish or patient.has_sent_wish or patient.has_sent_activity %}wish-state-row{% endif %}">
                             <td class="ps-4">
                                 <input type="checkbox" name="selected_patients" value="{{ patient.pk }}"
                                     class="form-check-input patient-checkbox">
@@ -315,6 +292,16 @@
                                         </div>
                                         <small class="text-white-50">
                                             Added: {{ patient.created_at|date:"M d, Y" }}</small>
+                                        {% if patient.has_pending_wish or patient.has_sent_wish or patient.has_sent_activity %}
+                                        <div class="d-flex align-items-center flex-wrap gap-1 mt-1">
+                                            {% if patient.has_pending_wish %}
+                                            <span class="badge rounded-pill bg-warning text-dark wish-state-badge">Scheduled</span>
+                                            {% endif %}
+                                            {% if patient.has_sent_wish or patient.has_sent_activity %}
+                                            <span class="badge rounded-pill bg-success wish-state-badge">Wished</span>
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </td>
@@ -326,7 +313,7 @@
                                         {{ patient.dob|date:"M d, Y" }}
                                     </span>
                                     {% if patient.dob|date:'m-d' == today|date:'m-d' %}
-                                    <span class="badge bg-danger bg-opacity-75 ms-1 pulse-animation"
+                                    <span class="badge bg-primary bg-opacity-75 ms-1 pulse-animation"
                                         style="font-size: 0.6rem;">
                                         <i class="bi bi-balloon-fill me-1"></i>TODAY
                                     </span>
@@ -385,13 +372,20 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <div class="form-check form-switch">
-                                    <input {% if patient.is_verified %}checked{% endif %}
-                                        class="form-check-input verify-toggle" type="checkbox" role="switch"
-                                        data-patient-id="{{ patient.pk }}" style="cursor: pointer;">
-                                    <label class="form-check-label small text-white-50">
-                                        {% if patient.is_verified %}Yes{% else %}No{% endif %}
-                                    </label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="form-check form-switch">
+                                        <input {% if patient.is_verified %}checked{% endif %}
+                                            class="form-check-input verify-toggle" type="checkbox" role="switch"
+                                            data-patient-id="{{ patient.pk }}" style="cursor: pointer;">
+                                        <label class="form-check-label small text-white-50">
+                                            {% if patient.is_verified %}Yes{% else %}No{% endif %}
+                                        </label>
+                                    </div>
+                                    {% if not patient.accepts_marketing %}
+                                    <i class="bi bi-bell-slash-fill text-danger fs-6"
+                                        title="Communications Disabled: {{ patient.unsubscribe_reason }}"
+                                        data-bs-toggle="tooltip" data-bs-placement="top"></i>
+                                    {% endif %}
                                 </div>
                             </td>
                             <td>
@@ -438,9 +432,13 @@
                             </td>
                             <td class="text-end pe-4">
                                 <div class="d-flex justify-content-end gap-2">
-                                    <button type="button" class="btn btn-icon btn-soft-success send-msg-btn"
-                                        title="Send Message" data-bs-toggle="modal" data-bs-target="#sendMessageModal"
-                                        data-patient-id="{{ patient.pk }}"
+                                    <button type="button"
+                                        class="btn btn-icon {% if patient.accepts_marketing %}btn-soft-success{% else %}btn-soft-secondary{% endif %} send-msg-btn"
+                                        title="{% if patient.accepts_marketing %}Send Message{% else %}Comm Disabled: {{ patient.unsubscribe_reason }}{% endif %}"
+                                        {% if patient.accepts_marketing %} data-bs-toggle="modal"
+                                        data-bs-target="#sendMessageModal" {% else %}
+                                        onclick="alert('Communications are disabled for this patient. Reason: {{ patient.unsubscribe_reason|escapejs }}')"
+                                        {% endif %} data-patient-id="{{ patient.pk }}"
                                         data-patient-name="{{ patient.first_name }} {{ patient.last_name }}"
                                         data-patient-email="{{ patient.email }}"
                                         data-patient-phone="{{ patient.phone }}"
@@ -579,38 +577,270 @@
         color: var(--bs-primary) !important;
     }
 
+    .wish-state-row {
+        box-shadow: inset 3px 0 0 rgba(13, 202, 240, 0.65);
+    }
+
+    .wish-state-badge {
+        font-size: 0.62rem;
+        letter-spacing: 0.3px;
+    }
+
     .birthday-glow {
-        background: rgba(244, 63, 94, 0.15);
-        border: 1px solid rgba(244, 63, 94, 0.3);
-        box-shadow: 0 0 15px rgba(244, 63, 94, 0.2);
+        background: rgba(99, 102, 241, 0.15);
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
         display: inline-block;
         transition: all 0.3s ease;
     }
 
     .birthday-glow:hover {
-        background: rgba(244, 63, 94, 0.25);
-        box-shadow: 0 0 20px rgba(244, 63, 94, 0.4);
+        background: rgba(99, 102, 241, 0.25);
+        box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
         transform: translateY(-1px);
     }
 
     .pulse-animation {
-        animation: pulse-red 2s infinite;
+        animation: pulse-indigo 2s infinite;
     }
 
-    @keyframes pulse-red {
+    @keyframes pulse-indigo {
         0% {
             transform: scale(0.95);
-            box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.7);
+            box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
         }
 
         70% {
             transform: scale(1);
-            box-shadow: 0 0 0 10px rgba(244, 63, 94, 0);
+            box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
         }
 
         100% {
             transform: scale(0.95);
-            box-shadow: 0 0 0 0 rgba(244, 63, 94, 0);
+            box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+        }
+    }
+
+    /* Modal Specific Enhancements */
+    #sendMessageModal .modal-content {
+        background: #111827 !important;
+        /* Tailwind gray-900 */
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    #sendMessageModal .modal-header {
+        background: rgba(255, 255, 255, 0.02);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    #sendMessageModal .modal-title-wrap {
+        min-width: 160px;
+    }
+
+    #sendMessageModal .modal-header-patient {
+        display: flex;
+        align-items: center;
+        justify-self: center;
+        gap: 0.75rem;
+        background: rgba(31, 41, 55, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 12px;
+        padding: 0.5rem 0.85rem;
+        min-width: 0;
+        width: min(860px, 100%);
+    }
+
+    #sendMessageModal .modal-header-patient-info {
+        min-width: 0;
+    }
+
+    #sendMessageModal #modal-patient-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
+    #sendMessageModal #modal-patient-contact {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    #sendMessageModal .modal-footer {
+        background: rgba(255, 255, 255, 0.02);
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    #sendMessageModal .glass-card {
+        background: rgba(31, 41, 55, 0.5) !important;
+        /* Tailwind gray-800 */
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    #sendMessageModal .form-control,
+    #sendMessageModal .form-select {
+        background-color: #1f2937 !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        color: #f3f4f6 !important;
+    }
+
+    #sendMessageModal .form-control:focus,
+    #sendMessageModal .form-select:focus {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+    }
+
+    #sendMessageModal .btn-channel-email.active,
+    #sendMessageModal .btn-check:checked+.btn-outline-primary {
+        background-color: #3b82f6 !important;
+        border-color: #3b82f6 !important;
+        color: white !important;
+    }
+
+    #sendMessageModal .btn-channel-sms.active,
+    #sendMessageModal .btn-check:checked+.btn-outline-info {
+        background-color: #06b6d4 !important;
+        border-color: #06b6d4 !important;
+        color: white !important;
+    }
+
+    #sendMessageModal .btn-schedule-action {
+        background-color: #facc15 !important;
+        /* Yellow-400 */
+        border-color: #facc15 !important;
+        color: #111827 !important;
+        font-weight: 600;
+    }
+
+    #sendMessageModal .btn-schedule-action:hover {
+        background-color: #eab308 !important;
+        /* Yellow-500 */
+    }
+
+    #sendMessageModal .copy-icon-btn {
+        opacity: 0.5;
+        transition: opacity 0.2s;
+    }
+
+    #sendMessageModal .copy-icon-btn:hover {
+        opacity: 1;
+    }
+
+    #sendMessageModal .modal-body {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+        max-height: calc(100vh - 170px);
+        overflow-y: auto;
+    }
+
+    #sendMessageModal .send-message-dialog {
+        max-width: min(96vw, 1680px);
+    }
+
+    #sendMessageModal .send-message-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+        gap: 1rem;
+    }
+
+    #sendMessageModal .send-message-left,
+    #sendMessageModal .send-message-right {
+        min-width: 0;
+    }
+
+    #sendMessageModal #quill-editor-container {
+        height: 130px !important;
+    }
+
+    #sendMessageModal #quill-signature-container {
+        height: 120px !important;
+    }
+
+    #sendMessageModal .send-via-toggle {
+        display: inline-flex;
+        background: #0b1730;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 4px;
+        gap: 4px;
+    }
+
+    #sendMessageModal .send-via-option {
+        min-width: 136px;
+        border: none;
+        border-radius: 9px;
+        padding: 0.55rem 0.9rem;
+        color: rgba(255, 255, 255, 0.65);
+        background: transparent;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        transition: all 0.2s ease;
+    }
+
+    #sendMessageModal .send-via-option .tick-indicator {
+        width: 18px;
+        height: 18px;
+        border: 1.5px solid rgba(255, 255, 255, 0.55);
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        line-height: 1;
+    }
+
+    #sendMessageModal .send-via-option .tick-indicator i {
+        opacity: 0;
+        transform: scale(0.85);
+        transition: all 0.15s ease;
+        font-size: 0.72rem;
+    }
+
+    #sendMessageModal .send-via-option .channel-icon {
+        opacity: 0.75;
+    }
+
+    #sendMessageModal .btn-check:checked+.send-via-option {
+        background: #3b82f6;
+        color: #ffffff;
+    }
+
+    #sendMessageModal .btn-check:checked+.send-via-option .tick-indicator {
+        border-color: #ffffff;
+        background: rgba(255, 255, 255, 0.2);
+    }
+
+    #sendMessageModal .btn-check:checked+.send-via-option .tick-indicator i {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    #sendMessageModal .btn-check:checked+.send-via-option .channel-icon {
+        opacity: 1;
+    }
+
+    @media (max-width: 1200px) {
+        #sendMessageModal .send-message-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 992px) {
+        #sendMessageModal .modal-header {
+            grid-template-columns: 1fr auto;
+        }
+
+        #sendMessageModal .modal-title-wrap {
+            grid-column: 1 / -1;
         }
     }
 </style>
@@ -618,248 +848,270 @@
 
 <!-- Send Message Modal -->
 <div class="modal fade" id="sendMessageModal" tabindex="-1" aria-labelledby="sendMessageModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-xl">
-        <div class="modal-content bg-dark border border-secondary border-opacity-25"
-            style="background: var(--sidebar-bg); backdrop-filter: blur(12px);">
-            <div class="modal-header border-bottom border-secondary border-opacity-25">
-                <h5 class="modal-title fw-bold" id="sendMessageModalLabel">
-                    <i class="bi bi-send me-2 text-primary"></i> Send Message
-                </h5>
+    <div class="modal-dialog modal-dialog-centered modal-xl send-message-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-3">
+                <div class="modal-title-wrap">
+                    <h5 class="modal-title fw-bold d-flex align-items-center text-white mb-0" id="sendMessageModalLabel">
+                        <i class="bi bi-send-fill me-2 text-primary"></i> Send Message
+                    </h5>
+                </div>
+                <div class="modal-header-patient">
+                    <div class="avatar-circle d-flex align-items-center justify-content-center fw-bold text-white fs-5"
+                        id="modal-patient-avatar"
+                        style="width: 44px; height: 44px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 50%;">
+                    </div>
+                    <div class="modal-header-patient-info">
+                        <h5 class="mb-0 fw-bold text-white fs-5" id="modal-patient-name">Patient Name</h5>
+                        <small class="text-white-50 d-block" id="modal-patient-contact">email / phone</small>
+                    </div>
+                </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                     aria-label="Close"></button>
             </div>
             <form method="post" action="{% url 'quick_send_message' %}">
                 {% csrf_token %}
-                <div class="modal-body">
-                    <!-- Patient Info (Read-only) -->
-                    <div class="glass-card p-3 mb-4" style="background: rgba(99, 102, 241, 0.1);">
-                        <div class="d-flex align-items-center">
-                            <div class="avatar-circle me-3" id="modal-patient-avatar"
-                                style="width: 50px; height: 50px;"></div>
-                            <div>
-                                <h5 class="mb-0 fw-bold" id="modal-patient-name">Patient Name</h5>
-                                <small class="text-muted" id="modal-patient-contact">email / phone</small>
-                            </div>
-                        </div>
-                    </div>
+                <div class="modal-body p-4">
                     <input type="hidden" name="patient_id" id="modal-patient-id">
 
-                    <!-- Message Type -->
-                    <div class="mb-3">
-                        <label class="form-label text-white-50 small">Message Type</label>
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="message_type" id="type-email" value="Email"
-                                checked>
-                            <label class="btn btn-outline-primary" for="type-email"><i class="bi bi-envelope me-1"></i>
-                                Email</label>
-
-                            <input type="radio" class="btn-check" name="message_type" id="type-sms" value="SMS">
-                            <label class="btn btn-outline-info" for="type-sms"><i class="bi bi-chat-dots me-1"></i>
-                                SMS</label>
-                        </div>
-                    </div>
-
-                    <!-- Template Selection -->
-                    <div class="mb-3">
-                        <label class="form-label text-white-50 small">Select Template</label>
-                        <select name="template_id" class="form-select" id="modal-template-select">
-                            <option value="">-- Select a template or write custom --</option>
-                            {% for template in templates %}
-                            <option value="{{ template.pk }}">
-                                {{ template.name }} ({{ template.type }})
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <!-- Target Recipient -->
-                    <div class="mb-3">
-                        <label class="form-label text-white-50 small" id="modal-to-label">To (Email)</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-dark border-secondary border-opacity-25 text-white-50"
-                                style="width: 45px; justify-content: center;">
-                                <i class="bi bi-envelope" id="modal-to-icon"></i>
-                            </span>
-                            <input type="text" name="to_recipient" class="form-control bg-dark" id="modal-to-display"
-                                readonly>
-                            <button class="btn btn-outline-secondary border-secondary border-opacity-25 text-white-50"
-                                type="button" data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top"
-                                data-bs-content="Copied!"
-                                onclick="copyToClipboard(document.getElementById('modal-to-display').value, this)">
-                                <i class="bi bi-clipboard"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- CC/BCC for Email (Moved above subject) -->
-                    <div id="email-options-group">
-                        <div class="row g-3">
-                            <div class="col-md-6 mb-3">
-                                <label
-                                    class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
-                                    <span>
-                                        CC Recipients
-                                        <button type="button"
-                                            class="btn btn-link p-0 ms-2 text-white-50 text-decoration-none"
-                                            data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top"
-                                            data-bs-content="Copied!" onclick="copyGroup('cc_recipients', this)">
-                                            <i class="bi bi-clipboard"></i>
-                                        </button>
-                                    </span>
-                                    <a href="{% url 'recipient_list' %}" class="text-primary small" target="_blank"><i
-                                            class="bi bi-gear"></i> Manage</a>
-                                </label>
-                                {% if saved_cc %}
-                                <div class="glass-card p-2" style="max-height: 120px; overflow-y: auto;">
-                                    {% for cc in saved_cc %}
-                                    <div class="form-check">
-                                        <input {% if cc.is_default %}checked{% endif %} class="form-check-input"
-                                            type="checkbox" name="cc_recipients" value="{{ cc.email }}"
-                                            id="cc_{{ cc.pk }}">
-                                        <label class="form-check-label small text-white" for="cc_{{ cc.pk }}">
-                                            {{ cc.name }} <span class="text-muted">({{ cc.email }})</span>
-                                        </label>
-                                    </div>
-                                    {% endfor %}
+                    <div class="send-message-grid">
+                        <div class="send-message-left">
+                            <!-- Send Message Via -->
+                            <div class="mb-4">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label text-white-50 small text-uppercase fw-bold ls-wider mb-0">Send
+                                        Message Via</label>
+                                    <span id="channel-badge-container"></span>
                                 </div>
-                                {% else %}
-                                <div class="small text-muted">No saved CC recipients.</div>
-                                {% endif %}
+                                <div class="send-via-toggle">
+                                    <input type="checkbox" class="btn-check channel-checkbox" name="channels"
+                                        id="type-email" value="Email" checked>
+                                    <label class="send-via-option" for="type-email">
+                                        <span class="tick-indicator"><i class="bi bi-check-lg"></i></span>
+                                        <i class="bi bi-envelope-fill channel-icon"></i> Email
+                                    </label>
+
+                                    <input type="checkbox" class="btn-check channel-checkbox" name="channels"
+                                        id="type-sms" value="SMS">
+                                    <label class="send-via-option" for="type-sms">
+                                        <span class="tick-indicator"><i class="bi bi-check-lg"></i></span>
+                                        <i class="bi bi-chat-square-fill channel-icon"></i> SMS
+                                    </label>
+                                </div>
+                                <div id="both-channels-alert" class="mt-2 d-none">
+                                    <div class="alert alert-info py-2 px-3 mb-0 border-0 rounded-3 shadow-sm d-flex align-items-center gap-2"
+                                        style="background: rgba(14, 165, 233, 0.1); color: #7dd3fc; font-size: 0.85rem;">
+                                        <i class="bi bi-info-circle-fill"></i>
+                                        <span>Note: This will schedule <strong>TWO</strong> separate messages.</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label
-                                    class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
-                                    <span>
-                                        BCC Recipients
-                                        <button type="button"
-                                            class="btn btn-link p-0 ms-2 text-white-50 text-decoration-none"
-                                            data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top"
-                                            data-bs-content="Copied!" onclick="copyGroup('bcc_recipients', this)">
-                                            <i class="bi bi-clipboard"></i>
-                                        </button>
-                                    </span>
-                                </label>
-                                {% if saved_bcc %}
-                                <div class="glass-card p-2" style="max-height: 120px; overflow-y: auto;">
-                                    {% for bcc in saved_bcc %}
-                                    <div class="form-check">
-                                        <input {% if bcc.is_default %}checked{% endif %} class="form-check-input"
-                                            type="checkbox" name="bcc_recipients" value="{{ bcc.email }}"
-                                            id="bcc_{{ bcc.pk }}">
-                                        <label class="form-check-label small text-white" for="bcc_{{ bcc.pk }}">
-                                            {{ bcc.name }} <span class="text-muted">({{ bcc.email }})</span>
-                                        </label>
-                                    </div>
+
+                            <!-- Template Selection -->
+                            <div class="mb-4">
+                                <label class="form-label text-white-50 small text-uppercase fw-bold ls-wider mb-2">Select
+                                    Template</label>
+                                <select name="template_id" class="form-select shadow-none" id="modal-template-select">
+                                    <option value="">-- Select a template or write custom --</option>
+                                    {% for template in templates %}
+                                    <option value="{{ template.pk }}">
+                                        {{ template.name }} ({{ template.type }})
+                                    </option>
                                     {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Target Recipient -->
+                            <div class="mb-4">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label text-white-50 small text-uppercase fw-bold ls-wider mb-0"
+                                        id="modal-to-label">To (Email)</label>
+                                    <button type="button" class="btn btn-link p-0 text-white-50 copy-icon-btn"
+                                        onclick="copyToClipboard(document.getElementById('modal-to-display').value, this)">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
                                 </div>
-                                {% else %}
-                                <div class="small text-muted">No saved BCC recipients.</div>
-                                {% endif %}
+                                <div class="input-group shadow-sm">
+                                    <span class="input-group-text bg-dark border-secondary border-opacity-10 text-white-50">
+                                        <i class="bi bi-envelope" id="modal-to-icon"></i>
+                                    </span>
+                                    <input type="text" name="to_recipient"
+                                        class="form-control bg-dark border-secondary border-opacity-10 py-2"
+                                        id="modal-to-display" readonly>
+                                </div>
+                            </div>
+
+                            <!-- Email Subject -->
+                            <div class="mb-4" id="email-subject-group">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label
+                                        class="form-label text-white-50 small text-uppercase fw-bold ls-wider mb-0">Subject</label>
+                                    <button type="button" class="btn btn-link p-0 text-white-50 copy-icon-btn"
+                                        onclick="copyToClipboard(document.getElementById('modal-subject').value, this)">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                                <input type="text" name="subject" class="form-control py-2 shadow-sm" id="modal-subject"
+                                    placeholder="Happy Birthday!">
+                            </div>
+
+                            <!-- Message Body -->
+                            <div class="mb-4">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label text-white-50 small text-uppercase fw-bold ls-wider mb-0">Message
+                                        Body</label>
+                                    <button type="button" class="btn btn-link p-0 text-white-50 copy-icon-btn"
+                                        onclick="copyQuillBody(this)">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                                <div id="quill-editor-container"
+                                    class="bg-dark text-white border-secondary border-opacity-10"
+                                    style="height: 150px; border-radius: 0.5rem; overflow: hidden;"></div>
+                                <textarea name="body" id="modal-body" style="display:none;"></textarea>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Email Subject -->
-                    <div class="mb-3" id="email-subject-group">
-                        <label
-                            class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
-                            <span>
-                                Subject
-                                <button type="button" class="btn btn-link p-0 text-white-50 text-decoration-none"
-                                    data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top"
-                                    data-bs-content="Copied!"
-                                    onclick="copyToClipboard(document.getElementById('modal-subject').value, this)">
-                                    <i class="bi bi-clipboard"></i>
-                                </button>
-                            </span>
+                        <div class="send-message-right">
+                            <!-- CC/BCC for Email -->
+                            <div class="mb-4" id="email-options-group">
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label class="form-label text-white-50 small text-uppercase fw-bold ls-wider mb-0">
+                                                CC Recipients
+                                                <button type="button" class="btn btn-link p-0 text-white-50 ms-1 copy-icon-btn"
+                                                    onclick="copyGroup('cc_recipients', this)">
+                                                    <i class="bi bi-clipboard"></i>
+                                                </button>
+                                            </label>
+                                            <a href="{% url 'recipient_list' %}"
+                                                class="text-primary small text-decoration-none d-flex align-items-center"
+                                                target="_blank">
+                                                <i class="bi bi-gear-fill me-1"></i> Manage
+                                            </a>
+                                        </div>
+                                        <div class="glass-card p-3 rounded-3" style="max-height: 130px; overflow-y: auto;">
+                                            {% if saved_cc %}
+                                            {% for cc in saved_cc %}
+                                            <div class="form-check mb-1">
+                                                <input {% if cc.is_default %}checked{% endif %} class="form-check-input"
+                                                    type="checkbox" name="cc_recipients" value="{{ cc.email }}"
+                                                    id="cc_{{ cc.pk }}">
+                                                <label class="form-check-label small text-white" for="cc_{{ cc.pk }}">
+                                                    {{ cc.name }} <span class="text-white-50 opacity-50 ms-1">
+                                                        ({{ cc.email }})</span>
+                                                </label>
+                                            </div>
+                                            {% endfor %}
+                                            {% else %}
+                                            <div class="small text-white-50 italic">No saved CC recipients.</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label class="form-label text-white-50 small text-uppercase fw-bold ls-wider mb-0">
+                                                BCC Recipients
+                                                <button type="button" class="btn btn-link p-0 text-white-50 ms-1 copy-icon-btn"
+                                                    onclick="copyGroup('bcc_recipients', this)">
+                                                    <i class="bi bi-clipboard"></i>
+                                                </button>
+                                            </label>
+                                        </div>
+                                        <div class="glass-card p-3 rounded-3" style="max-height: 130px; overflow-y: auto;">
+                                            {% if saved_bcc %}
+                                            {% for bcc in saved_bcc %}
+                                            <div class="form-check mb-1">
+                                                <input {% if bcc.is_default %}checked{% endif %} class="form-check-input"
+                                                    type="checkbox" name="bcc_recipients" value="{{ bcc.email }}"
+                                                    id="bcc_{{ bcc.pk }}">
+                                                <label class="form-check-label small text-white" for="bcc_{{ bcc.pk }}">
+                                                    {{ bcc.name }} <span class="text-white-50 opacity-50 ms-1">
+                                                        ({{ bcc.email }})</span>
+                                                </label>
+                                            </div>
+                                            {% endfor %}
+                                            {% else %}
+                                            <div class="small text-white-50 italic">No saved BCC recipients.</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                        </label>
-                        <input type="text" name="subject" class="form-control" id="modal-subject"
-                            placeholder="Happy Birthday!">
-                    </div>
-
-                    <!-- Message Body -->
-                    <div class="mb-3">
-                        <label
-                            class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
-                            <span>Message Body
-                                <button type="button" class="btn btn-link p-0 text-white-50 text-decoration-none"
-                                    data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top"
-                                    data-bs-content="Copied!" onclick="copyQuillBody(this)">
-                                    <i class="bi bi-clipboard"></i>
-                                </button>
-                            </span>
-
-                        </label>
-                        <!-- Quill Editor for Message Body -->
-                        <div id="quill-editor-container" class="bg-dark text-white border-secondary border-opacity-25"
-                            style="height: 150px; border-radius: 0.375rem;"></div>
-                        <textarea name="body" id="modal-body" style="display:none;"></textarea>
-                    </div>
-
-                    <!-- Signature Selection -->
-                    <div class="mb-3" id="email-signature-group">
-                        <label
-                            class="form-label text-white-50 small w-100 d-flex justify-content-between align-items-center">
-                            <span>
-                                Signature
-                                <button type="button" class="btn btn-link p-0 ms-2 text-white-50 text-decoration-none"
-                                    data-bs-container="body" data-bs-toggle="popover" data-bs-placement="top"
-                                    data-bs-content="Copied!" onclick="copyQuillSignature(this)">
-                                    <i class="bi bi-clipboard"></i>
-                                </button>
-                            </span>
-                            <a href="{% url 'signature_list' %}" class="text-primary small" target="_blank">
-                                <i class="bi bi-gear"></i> Manage
-                            </a>
-                        </label>
-                        <select name="signature_id" class="form-select" id="modal-signature-select">
-                            <option value="" data-content="">-- No Signature --</option>
-                            {% for sig in signatures %}
-                            <option {% if sig.is_default %}selected{% endif %} value="{{ sig.pk }}"
-                                data-content="{{ sig.content|default:'' }}">
-                                {{ sig.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-
-                        <!-- Quill Editor for Signature -->
-                        <div id="quill-signature-container"
-                            class="mt-2 bg-dark text-white border-secondary border-opacity-25"
-                            style="height: 150px; border-radius: 0.375rem;"></div>
-                        <textarea name="custom_signature_content" id="modal-signature-content"
-                            style="display:none;"></textarea>
+                            <!-- Signature Selection -->
+                            <div class="mb-4" id="email-signature-group">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label text-white-50 small text-uppercase fw-bold ls-wider mb-0">
+                                        Signature
+                                        <button type="button" class="btn btn-link p-0 text-white-50 ms-1 copy-icon-btn"
+                                            onclick="copyQuillSignature(this)">
+                                            <i class="bi bi-clipboard"></i>
+                                        </button>
+                                    </label>
+                                    <a href="{% url 'signature_list' %}"
+                                        class="text-primary small text-decoration-none d-flex align-items-center"
+                                        target="_blank">
+                                        <i class="bi bi-gear-fill me-1"></i> Manage
+                                    </a>
+                                </div>
+                                <select name="signature_id" class="form-select shadow-sm mb-2" id="modal-signature-select">
+                                    <option value="" data-content="">-- No Signature --</option>
+                                    {% for sig in signatures %}
+                                    <option {% if sig.is_default %}selected{% endif %} value="{{ sig.pk }}"
+                                        data-content="{{ sig.content|default:'' }}">
+                                        {{ sig.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div id="quill-signature-container"
+                                    class="bg-dark text-white border-secondary border-opacity-10"
+                                    style="height: 100px; border-radius: 0.5rem; overflow: hidden;"></div>
+                                <textarea name="custom_signature_content" id="modal-signature-content"
+                                    style="display:none;"></textarea>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Schedule Toggle -->
-                    <div class="mb-3 p-3 rounded"
-                        style="background: rgba(15, 23, 42, 0.4); border: 1px dashed rgba(255,255,255,0.1);">
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="schedule-toggle" name="schedule_now"
-                                role="switch">
-                            <label class="form-check-label text-white d-flex align-items-center gap-2"
+                    <div class="mb-0 p-3 rounded-3"
+                        style="background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.05);">
+                        <div class="form-check form-switch d-flex align-items-center mb-0">
+                            <input class="form-check-input me-3 shadow-none" type="checkbox" id="schedule-toggle"
+                                name="schedule_now" role="switch">
+                            <label class="form-check-label text-white d-flex align-items-center gap-2 mb-0"
                                 for="schedule-toggle">
-                                <i class="bi bi-calendar-event text-warning"></i>
-                                Schedule Message
+                                <i class="bi bi-calendar-event-fill text-warning"></i>
+                                <span class="fw-bold fs-6">Schedule Message</span>
                             </label>
                         </div>
                         <div id="schedule-options"
-                            class="d-none mt-3 border-top border-secondary border-opacity-25 pt-3">
-                            <label class="form-label text-white-50 small">Schedule Time (CA Time)</label>
-                            <input type="time" name="schedule_time"
-                                class="form-control bg-dark text-white border-secondary border-opacity-25"
-                                value="06:00">
-                            <div class="form-text text-white-50 ms-0 ps-0 mt-1">
+                            class="d-none mt-3 p-3 rounded bg-black bg-opacity-25 border border-secondary border-opacity-10 animate__animated animate__fadeIn">
+                            <label class="form-label text-white-50 small text-uppercase fw-bold ls-wider mb-2">Schedule
+                                Time (CA Time)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-dark border-secondary border-opacity-10 text-white-50">
+                                    <i class="bi bi-clock-fill"></i>
+                                </span>
+                                <input type="time" name="schedule_time"
+                                    class="form-control bg-dark text-white border-secondary border-opacity-10"
+                                    value="06:00">
+                            </div>
+                            <div class="form-text text-white-50 small mt-2 d-flex align-items-start gap-2">
+                                <i class="bi bi-info-circle-fill text-info mt-1"></i>
                                 Message will be sent on the patient's next birthday at this time (PST).
                             </div>
                         </div>
                     </div>
 
                 </div>
-                <div class="modal-footer border-top border-secondary border-opacity-25">
-                    <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="btn-send-message">
-                        <i class="bi bi-send me-2"></i> Send Now
+                <div class="modal-footer px-4 py-3">
+                    <button type="button" class="btn btn-link text-white text-decoration-none px-4"
+                        data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-schedule-action px-5 rounded-3 d-flex align-items-center gap-2"
+                        id="btn-send-message">
+                        <i class="bi bi-send-fill"></i> Send Now
                     </button>
                 </div>
             </form>
@@ -1008,27 +1260,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const scheduleToggle = document.getElementById('schedule-toggle');
-        const sendBtn = document.getElementById('btn-send-message');
-        const scheduleOptions = document.getElementById('schedule-options');
-
-        if (scheduleToggle && sendBtn) {
-            scheduleToggle.addEventListener('change', function () {
-                if (this.checked) {
-                    sendBtn.innerHTML = '<i class="bi bi-clock-history me-2"></i> Schedule';
-                    sendBtn.classList.remove('btn-primary');
-                    sendBtn.classList.add('btn-warning');
-                    if (scheduleOptions) scheduleOptions.classList.remove('d-none');
-                } else {
-                    sendBtn.innerHTML = '<i class="bi bi-send me-2"></i> Send Now';
-                    sendBtn.classList.remove('btn-warning');
-                    sendBtn.classList.add('btn-primary');
-                    if (scheduleOptions) scheduleOptions.classList.add('d-none');
-                }
-            });
-        }
-
-        // --- SMO Patient Preview & Selective Sync ---
+        // SMO Patient Preview & Selective Sync...
         const practicesContainer = document.getElementById('smo-practices-container');
         const previewContainer = document.getElementById('smo-patient-preview');
         const previewBody = document.getElementById('preview-body');
@@ -1462,6 +1694,140 @@
         let currentPatientPhone = '';
         let currentPatientType = '';
         let currentIsExpired = false;
+        let lastClickedChannel = 'Email';
+
+        // --- Send Message Modal Logic MOVED UP ---
+        const sendMessageModal = document.getElementById('sendMessageModal');
+        const channelCheckboxes = document.querySelectorAll('.channel-checkbox');
+        const emailSubjectGroup = document.getElementById('email-subject-group');
+        const emailOptionsGroup = document.getElementById('email-options-group');
+        const emailSignatureGroup = document.getElementById('email-signature-group');
+        const signatureSelect = document.getElementById('modal-signature-select');
+        const templateSelect = document.getElementById('modal-template-select');
+
+        // Helper Functions (Placeholders for Quill logic)
+        window.updateQuillContent = function (html) {
+            if (window.quill) {
+                const delta = window.quill.clipboard.convert(html || '');
+                window.quill.setContents(delta, 'silent');
+            }
+            document.getElementById('modal-body').value = html || '';
+        };
+
+        window.updateQuillSignature = function (html) {
+            if (window.quillSignature) {
+                const delta = window.quillSignature.clipboard.convert(html || '');
+                window.quillSignature.setContents(delta, 'silent');
+            }
+            document.getElementById('modal-signature-content').value = html || '';
+        };
+
+        function tryAutoSelectTemplate() {
+            // templateSelect is now global in this scope
+            const isEmail = document.getElementById('type-email').checked;
+            const isSMS = document.getElementById('type-sms').checked;
+
+            // Prefer the last clicked channel for the UI focus template
+            let focusChannel = lastClickedChannel;
+            if (!isEmail && isSMS) focusChannel = 'SMS';
+            if (isEmail && !isSMS) focusChannel = 'Email';
+
+            console.log("Auto-selecting for PatientType:", currentPatientType, "Expired:", currentIsExpired);
+
+            const suffix = (focusChannel === 'SMS') ? 'Msg' : 'Email';
+            let targetTemplateName = "";
+            if (currentPatientType === 'Proceed' && !currentIsExpired) {
+                targetTemplateName = "B'Day - Proceed - " + suffix;
+            } else {
+                targetTemplateName = "B'Day - Regular - " + suffix;
+            }
+
+            console.log("Looking for template:", targetTemplateName);
+
+            let foundSpecific = false;
+            if (templateSelect) {
+                if (targetTemplateName) {
+                    for (let i = 0; i < templateSelect.options.length; i++) {
+                        const optText = templateSelect.options[i].text;
+                        if (optText.includes(targetTemplateName)) {
+                            templateSelect.selectedIndex = i;
+                            foundSpecific = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (foundSpecific) {
+                    templateSelect.dispatchEvent(new Event('change'));
+                } else {
+                    templateSelect.value = '';
+                    document.getElementById('modal-subject').value = '';
+                    updateQuillContent('');
+
+                    if (signatureSelect) {
+                        signatureSelect.value = '';
+                        updateQuillSignature('');
+                    }
+                }
+            }
+        }
+
+        if (sendMessageModal) {
+            console.log("Attaching show.bs.modal listener to sendMessageModal");
+            sendMessageModal.addEventListener('show.bs.modal', function (event) {
+                console.log("Modal show event triggered");
+                const button = event.relatedTarget;
+                if (!button) {
+                    console.warn("No related target button found for modal");
+                    return;
+                }
+
+                const patientId = button.getAttribute('data-patient-id');
+                const patientName = button.getAttribute('data-patient-name');
+                const patientEmail = button.getAttribute('data-patient-email');
+                const patientPhone = button.getAttribute('data-patient-phone');
+
+                console.log("Patient Data:", { patientId, patientName, patientEmail, patientPhone });
+
+                // Update globals
+                currentPatientType = button.getAttribute('data-patient-type');
+                currentIsExpired = button.getAttribute('data-is-expired') === 'true';
+                currentPatientEmail = patientEmail || '';
+                currentPatientPhone = patientPhone || '';
+
+                // Store patient names for placeholder replacement
+                const nameParts = patientName.split(' ');
+                currentPatientFirstName = nameParts[0] || '';
+                currentPatientLastName = nameParts.slice(1).join(' ') || '';
+
+                // Populate modal fields
+                document.getElementById('modal-patient-id').value = patientId;
+                document.getElementById('modal-patient-name').textContent = patientName;
+                document.getElementById('modal-patient-contact').textContent = (patientEmail || 'No Email') + ' | ' + (patientPhone || 'No Phone');
+
+                // Reset to Email default on open
+                document.getElementById('type-email').checked = true;
+                document.getElementById('type-sms').checked = false;
+                document.getElementById('schedule-toggle').checked = false;
+                lastClickedChannel = 'Email';
+
+                if (emailSubjectGroup) emailSubjectGroup.style.display = 'block';
+                if (emailOptionsGroup) emailOptionsGroup.style.display = 'block';
+                if (emailSignatureGroup) emailSignatureGroup.style.display = 'block';
+
+                // Initial update of 'To' field
+                updateToField();
+
+                // Avatar initials
+                const initials = nameParts.length > 1
+                    ? nameParts[0][0] + nameParts[nameParts.length - 1][0]
+                    : (nameParts[0] ? nameParts[0][0] : '?');
+                document.getElementById('modal-patient-avatar').textContent = initials.toUpperCase();
+
+                // Run auto-select logic
+                setTimeout(tryAutoSelectTemplate, 100);
+            });
+        }
 
         // --- 2. Live Search Logic ---
         const searchInput = document.getElementById('search-input');
@@ -1490,7 +1856,7 @@
                         if (resultsSection && newResults) {
                             resultsSection.innerHTML = newResults;
                             attachListeners();
-                            attachVerifyListeners(); // Re-attach verify listeners to new DOM elements
+                            attachVerifyListeners();
                         }
                     })
                     .catch(err => console.error('Error fetching search results:', err));
@@ -1515,219 +1881,156 @@
         updateToField();
 
         // Initialize Quill (Global for access)
-        window.quill = new Quill('#quill-editor-container', {
-            theme: 'snow',
-            modules: {
-                toolbar: [
-                    ['bold', 'italic', 'underline'],
-                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                    [{ 'color': [] }, { 'background': [] }],
-                    ['clean']
-                ]
-            }
-        });
-
-        // Sync Quill with Hidden Textarea
-        window.quill.on('text-change', function () {
-            document.getElementById('modal-body').value = window.quill.root.innerHTML;
-        });
-
-        // Helper to copy Rich Text (HTML) + Plain Text
-        function copyRichText(html, text, btn) {
-            try {
-                const blobHtml = new Blob([html], { type: 'text/html' });
-                const blobText = new Blob([text], { type: 'text/plain' });
-                const data = [new ClipboardItem({
-                    ["text/html"]: blobHtml,
-                    ["text/plain"]: blobText
-                })];
-                navigator.clipboard.write(data).then(() => {
-                    showPopover(btn);
-                }).catch(err => {
-                    console.error('Rich copy failed, falling back to basic:', err);
-                    copyToClipboard(text, btn);
+        try {
+            if (typeof Quill !== 'undefined' && document.getElementById('quill-editor-container')) {
+                window.quill = new Quill('#quill-editor-container', {
+                    theme: 'snow',
+                    modules: {
+                        toolbar: [
+                            ['bold', 'italic', 'underline'],
+                            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                            [{ 'color': [] }, { 'background': [] }],
+                            ['clean']
+                        ]
+                    }
                 });
-            } catch (e) {
-                console.warn('ClipboardItem not supported or error:', e);
-                copyToClipboard(text, btn);
-            }
-        }
 
-        // Handle "Copy" button for Body (Rich Text)
-        window.copyQuillBody = function (btn) {
-            if (window.quill) {
-                const html = window.quill.root.innerHTML;
-                const text = window.quill.getText();
-                copyRichText(html, text, btn);
+                // Sync Quill with Hidden Textarea
+                window.quill.on('text-change', function () {
+                    document.getElementById('modal-body').value = window.quill.root.innerHTML;
+                });
             } else {
-                // Fallback
-                copyToClipboard(document.getElementById('modal-body').value, btn);
+                console.warn("Quill library not loaded or container missing. Skipping Body editor init.");
             }
-        }
-
-        // Also Update Quill when Template is selected or manually set
-        window.updateQuillContent = function (htmlContent) {
-            if (window.quill) {
-                const delta = window.quill.clipboard.convert(htmlContent);
-                window.quill.setContents(delta, 'silent');
-                document.getElementById('modal-body').value = htmlContent;
-            }
+        } catch (e) {
+            console.error("Error initializing Quill Body:", e);
         }
 
         // Initialize Signature Quill
-        window.quillSignature = new Quill('#quill-signature-container', {
-            theme: 'snow',
-            modules: {
-                toolbar: [
-                    ['bold', 'italic', 'underline'],
-                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                    [{ 'color': [] }, { 'background': [] }],
-                    ['clean']
-                ]
-            }
-        });
-
-        window.quillSignature.on('text-change', function () {
-            document.getElementById('modal-signature-content').value = window.quillSignature.root.innerHTML;
-        });
-
-        // Helper to update signature quill
-        function updateQuillSignature(htmlContent) {
-            if (window.quillSignature) {
-                const delta = window.quillSignature.clipboard.convert(htmlContent);
-                window.quillSignature.setContents(delta, 'silent');
-                document.getElementById('modal-signature-content').value = htmlContent;
-            }
-        }
-
-        // --- 3. Send Message Modal Logic ---
-        const sendMessageModal = document.getElementById('sendMessageModal');
-
-        function tryAutoSelectTemplate() {
-            const templateSelect = document.getElementById('modal-template-select');
-            const isEmail = document.getElementById('type-email').checked;
-            const suffix = isEmail ? 'Email' : 'Msg';
-
-            let targetTemplateName = "";
-            if (currentPatientType === 'Regular' || currentIsExpired) {
-                targetTemplateName = "B'Day - Regular - " + suffix;
-            } else if (currentPatientType === 'Proceed' && !currentIsExpired) {
-                targetTemplateName = "B'Day - Proceed - " + suffix;
-            }
-
-            let foundSpecific = false;
-            if (targetTemplateName && templateSelect) {
-                for (let i = 0; i < templateSelect.options.length; i++) {
-                    if (templateSelect.options[i].text.includes(targetTemplateName)) {
-                        templateSelect.selectedIndex = i;
-                        foundSpecific = true;
-                        break;
+        try {
+            if (typeof Quill !== 'undefined' && document.getElementById('quill-signature-container')) {
+                window.quillSignature = new Quill('#quill-signature-container', {
+                    theme: 'snow',
+                    modules: {
+                        toolbar: [
+                            ['bold', 'italic', 'underline'],
+                            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                            [{ 'color': [] }, { 'background': [] }],
+                            ['clean']
+                        ]
                     }
-                }
-            }
+                });
 
-            if (foundSpecific) {
-                templateSelect.dispatchEvent(new Event('change'));
-            } else if (templateSelect) {
-                templateSelect.value = '';
-                document.getElementById('modal-subject').value = '';
-                if (typeof updateQuillContent === 'function') {
-                    updateQuillContent('');
-                } else {
-                    document.getElementById('modal-body').value = '';
-                }
-                const signatureSelect = document.getElementById('modal-signature-select');
-                if (signatureSelect) {
-                    signatureSelect.value = '';
-                    updateQuillSignature('');
-                }
+                window.quillSignature.on('text-change', function () {
+                    document.getElementById('modal-signature-content').value = window.quillSignature.root.innerHTML;
+                });
+            } else {
+                console.warn("Quill library not loaded or container missing. Skipping Signature editor init.");
             }
+        } catch (e) {
+            console.error("Error initializing Quill Signature:", e);
         }
 
-        if (sendMessageModal) {
-            sendMessageModal.addEventListener('show.bs.modal', function (event) {
-                const button = event.relatedTarget;
-                const patientId = button.getAttribute('data-patient-id');
-                const patientName = button.getAttribute('data-patient-name');
-                const patientEmail = button.getAttribute('data-patient-email');
-                const patientPhone = button.getAttribute('data-patient-phone');
 
-                // Update globals
-                currentPatientType = button.getAttribute('data-patient-type');
-                currentIsExpired = button.getAttribute('data-is-expired') === 'true';
-                currentPatientEmail = patientEmail || '';
-                currentPatientPhone = patientPhone || '';
 
-                // Store patient names for placeholder replacement
-                const nameParts = patientName.split(' ');
-                currentPatientFirstName = nameParts[0] || '';
-                currentPatientLastName = nameParts.slice(1).join(' ') || '';
-
-                // Populate modal fields
-                document.getElementById('modal-patient-id').value = patientId;
-                document.getElementById('modal-patient-name').textContent = patientName;
-                document.getElementById('modal-patient-contact').textContent = (patientEmail || 'No Email') + ' | ' + (patientPhone || 'No Phone');
-
-                // Reset to Email default on open
-                document.getElementById('type-email').checked = true;
-                const emailSubjectGroup = document.getElementById('email-subject-group');
-                const emailOptionsGroup = document.getElementById('email-options-group');
-                const emailSignatureGroup = document.getElementById('email-signature-group');
-                if (emailSubjectGroup) emailSubjectGroup.style.display = 'block';
-                if (emailOptionsGroup) emailOptionsGroup.style.display = 'block';
-                if (emailSignatureGroup) emailSignatureGroup.style.display = 'block';
-
-                // Initial update of 'To' field
-                updateToField();
-
-                // Avatar initials
-                const initials = nameParts.length > 1
-                    ? nameParts[0][0] + nameParts[nameParts.length - 1][0]
-                    : (nameParts[0] ? nameParts[0][0] : '?');
-                document.getElementById('modal-patient-avatar').textContent = initials.toUpperCase();
-
-                // Run auto-select logic
-                tryAutoSelectTemplate();
-            });
-        }
-
-        // Toggle Email/SMS specific fields
-        const typeRadios = document.querySelectorAll('input[name="message_type"]');
-        const emailSubjectGroup = document.getElementById('email-subject-group');
-        const emailOptionsGroup = document.getElementById('email-options-group');
-        const emailSignatureGroup = document.getElementById('email-signature-group');
-        const signatureSelect = document.getElementById('modal-signature-select');
 
         function updateToField() {
-            const isEmail = document.getElementById('type-email').checked;
+            const emailChecked = document.getElementById('type-email').checked;
+            const smsChecked = document.getElementById('type-sms').checked;
+            const displayChannel =
+                (lastClickedChannel === 'SMS' && smsChecked) ? 'SMS' :
+                    (emailChecked ? 'Email' : (smsChecked ? 'SMS' : ''));
+
             const toLabel = document.getElementById('modal-to-label');
             const toIcon = document.getElementById('modal-to-icon');
             const toDisplay = document.getElementById('modal-to-display');
+            const bothAlert = document.getElementById('both-channels-alert');
+            const badgeContainer = document.getElementById('channel-badge-container');
 
-            if (isEmail) {
+            // Dual-channel note
+            if (emailChecked && smsChecked) {
+                if (bothAlert) bothAlert.classList.remove('d-none');
+            } else {
+                if (bothAlert) bothAlert.classList.add('d-none');
+            }
+
+            // Sync Badges
+            if (badgeContainer) {
+                let badges = '';
+                if (emailChecked) badges += '<span class="badge bg-primary border border-primary border-opacity-25 me-1">Email</span>';
+                if (smsChecked) badges += '<span class="badge bg-info text-dark border border-info border-opacity-25">SMS</span>';
+                badgeContainer.innerHTML = badges;
+            }
+
+            if (displayChannel === 'Email') {
                 if (toLabel) toLabel.textContent = 'To (Email)';
                 if (toIcon) toIcon.className = 'bi bi-envelope';
                 if (toDisplay) toDisplay.value = currentPatientEmail || 'No Email Address';
-            } else {
+            } else if (displayChannel === 'SMS') {
                 if (toLabel) toLabel.textContent = 'To (Phone)';
                 if (toIcon) toIcon.className = 'bi bi-chat-dots';
                 if (toDisplay) toDisplay.value = currentPatientPhone || 'No Phone Number';
+            } else {
+                if (toLabel) toLabel.textContent = 'To';
+                if (toIcon) toIcon.className = 'bi bi-exclamation-triangle';
+                if (toDisplay) toDisplay.value = 'Select a channel above';
+            }
+
+            // Show/Hide Email specific fields
+            if (displayChannel === 'Email') {
+                if (emailSubjectGroup) emailSubjectGroup.style.display = 'block';
+                if (emailOptionsGroup) emailOptionsGroup.style.display = 'block';
+                if (emailSignatureGroup) emailSignatureGroup.style.display = 'block';
+            } else {
+                if (emailSubjectGroup) emailSubjectGroup.style.display = 'none';
+                if (emailOptionsGroup) emailOptionsGroup.style.display = 'none';
+                if (emailSignatureGroup) emailSignatureGroup.style.display = 'none';
+            }
+
+            // Update Button Text
+            const btnSend = document.getElementById('btn-send-message');
+            const isScheduled = document.getElementById('schedule-toggle').checked;
+
+            // Toggle Schedule Time Options
+            const scheduleOptions = document.getElementById('schedule-options');
+            if (scheduleOptions) {
+                if (isScheduled) scheduleOptions.classList.remove('d-none');
+                else scheduleOptions.classList.add('d-none');
+            }
+
+            let actionText = isScheduled ? 'Schedule' : 'Send';
+            let targetText = '';
+
+            if (emailChecked && smsChecked) targetText = ' Both';
+            else if (emailChecked) targetText = ' Email';
+            else if (smsChecked) targetText = ' SMS';
+
+            if (btnSend) {
+                btnSend.innerHTML = `<i class="bi bi-${isScheduled ? 'calendar-plus' : 'send'} me-2"></i> ${actionText}${targetText}${isScheduled ? '' : ' Now'}`;
+                // Disable if no channel selected
+                btnSend.disabled = !emailChecked && !smsChecked;
             }
         }
 
-        typeRadios.forEach(radio => {
-            radio.addEventListener('change', function () {
-                updateToField();
-                if (this.value === 'SMS') {
-                    if (emailSubjectGroup) emailSubjectGroup.style.display = 'none';
-                    if (emailOptionsGroup) emailOptionsGroup.style.display = 'none';
-                    if (emailSignatureGroup) emailSignatureGroup.style.display = 'none';
-                } else {
-                    if (emailSubjectGroup) emailSubjectGroup.style.display = 'block';
-                    if (emailOptionsGroup) emailOptionsGroup.style.display = 'block';
-                    if (emailSignatureGroup) emailSignatureGroup.style.display = 'block';
+        // Add listener for schedule toggle to update button text
+        const scheduleToggle = document.getElementById('schedule-toggle');
+        if (scheduleToggle) {
+            scheduleToggle.addEventListener('change', updateToField);
+        }
+
+        channelCheckboxes.forEach(cb => {
+            cb.addEventListener('change', function () {
+                // Keep at least one channel selected.
+                const emailBox = document.getElementById('type-email');
+                const smsBox = document.getElementById('type-sms');
+                if (!emailBox.checked && !smsBox.checked) {
+                    this.checked = true;
                 }
-                // Trigger auto-select when type changes
+
+                if (this.checked) {
+                    lastClickedChannel = (this.id === 'type-email') ? 'Email' : 'SMS';
+                }
+                updateToField();
                 tryAutoSelectTemplate();
             });
         });
@@ -1743,7 +2046,6 @@
         {% endfor %}
 
         // Template Selection Auto-Fill with Placeholder Replacement
-        const templateSelect = document.getElementById('modal-template-select');
         if (templateSelect) {
             templateSelect.addEventListener('change', function () {
                 const templateId = this.value;
@@ -1773,10 +2075,11 @@
                 document.getElementById('modal-subject').value = subject;
 
                 if (typeof updateQuillContent === 'function') {
-                    updateQuillContent(body);
+                    console.log("Updating Quill with body (length):", body ? body.length : 0);
+                    updateQuillContent(body || '');
                 } else {
-                    // Fallback if Quill missing
-                    document.getElementById('modal-body').value = body;
+                    console.error("updateQuillContent not found!");
+                    document.getElementById('modal-body').value = body || '';
                 }
 
                 // Sync signature dropdown if template has a default
@@ -1791,8 +2094,9 @@
         if (signatureSelect) {
             signatureSelect.addEventListener('change', function () {
                 const selectedOption = this.options[this.selectedIndex];
-                const content = selectedOption.getAttribute('data-content') || '';
-                updateQuillSignature(content);
+                const content = selectedOption ? selectedOption.getAttribute('data-content') : '';
+                console.log("Updating Signature Quill with content (length):", content ? content.length : 0);
+                updateQuillSignature(content || '');
             });
 
             // Initial check on load
@@ -1800,23 +2104,92 @@
                 signatureSelect.dispatchEvent(new Event('change'));
             }
         }
-        // Copy Utils
+        // --- Copy Utils ---
         window.copyToClipboard = function (text, btn) {
             if (!text) return;
-            navigator.clipboard.writeText(text).then(() => {
+
+            function success() {
+                const icon = btn.querySelector('i');
+                if (icon) {
+                    const originalClass = icon.className;
+                    icon.className = 'bi bi-check2 text-success';
+                    setTimeout(() => icon.className = originalClass, 2000);
+                }
                 showPopover(btn);
-            }).catch(err => console.error('Failed to copy', err));
+            }
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(success).catch(err => {
+                    console.error('navigator.clipboard failed, trying fallback', err);
+                    fallbackCopy(text, success);
+                });
+            } else {
+                fallbackCopy(text, success);
+            }
+        };
+
+        function fallbackCopy(text, callback) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful && callback) callback();
+            } catch (err) {
+                console.error('Fallback copy failed', err);
+            }
+            document.body.removeChild(textArea);
         }
+
+        window.copyRichText = function (html, text, btn) {
+            if (!html && !text) return;
+
+            function success() {
+                const icon = btn.querySelector('i');
+                if (icon) {
+                    const originalClass = icon.className;
+                    icon.className = 'bi bi-check2 text-success';
+                    setTimeout(() => icon.className = originalClass, 2000);
+                }
+                showPopover(btn);
+            }
+
+            if (navigator.clipboard && window.isSecureContext && window.ClipboardItem) {
+                const blobHtml = new Blob([html], { type: "text/html" });
+                const blobText = new Blob([text], { type: "text/plain" });
+                const item = new ClipboardItem({
+                    "text/html": blobHtml,
+                    "text/plain": blobText
+                });
+                navigator.clipboard.write([item]).then(success).catch(err => {
+                    console.error('Rich text copy failed', err);
+                    copyToClipboard(text, btn);
+                });
+            } else {
+                copyToClipboard(text, btn);
+            }
+        };
 
         window.copyGroup = function (name, btn) {
             const checked = Array.from(document.querySelectorAll(`input[name="${name}"]:checked`))
                 .map(cb => cb.value);
             if (checked.length > 0) {
                 copyToClipboard(checked.join(', '), btn);
-            } else {
-                // Should we show nothing or error? For now, nothing as per request "copied show popover"
             }
-        }
+        };
+
+        window.copyQuillBody = function (btn) {
+            if (window.quill) {
+                const html = window.quill.root.innerHTML;
+                const text = window.quill.getText();
+                copyRichText(html, text, btn);
+            }
+        };
 
         window.copyQuillSignature = function (btn) {
             if (window.quillSignature) {
@@ -1824,20 +2197,19 @@
                 const text = window.quillSignature.getText();
                 copyRichText(html, text, btn);
             }
-        }
+        };
 
         function showPopover(btn) {
-            // Initialize popover if not already
             let popover = bootstrap.Popover.getInstance(btn);
             if (!popover) {
                 popover = new bootstrap.Popover(btn, {
-                    trigger: 'manual'
+                    trigger: 'manual',
+                    content: 'Copied!',
+                    placement: 'top'
                 });
             }
             popover.show();
-            setTimeout(() => {
-                popover.hide();
-            }, 1000);
+            setTimeout(() => popover.hide(), 1500);
         }
     });
 </script>

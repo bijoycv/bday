@@ -200,8 +200,8 @@ Date of Birth: 08/27/1990
                             <label class="text-white-50">Enrollment Date</label>
                         </div>
                     </div>
-                    <div class="col-12">
-                        <div class="d-flex align-items-center gap-3 p-3 rounded"
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center gap-3 p-3 rounded h-100"
                             style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2);">
                             {{ form.is_verified }}
                             <div class="d-flex flex-column">
@@ -209,11 +209,48 @@ Date of Birth: 08/27/1990
                                     for="{{ form.is_verified.id_for_label }}">
                                     Verified Patient
                                 </label>
-                                <small class="text-white-50">Confirm that billing details have been verified.</small>
+                                <small class="text-white-50">Billing details verified.</small>
                             </div>
                         </div>
                     </div>
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center gap-3 p-3 rounded h-100"
+                            style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">
+                            {{ form.accepts_marketing }}
+                            <div class="d-flex flex-column">
+                                <label class="form-check-label text-white fw-bold"
+                                    for="{{ form.accepts_marketing.id_for_label }}">
+                                    Accepts Communications
+                                </label>
+                                <small class="text-white-50">Receive b-day wishes & messages.</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 mb-2" id="unsubscribe-reason-wrapper"
+                        style="display: {% if form.accepts_marketing.value %}none{% elif form.instance.pk and not form.instance.accepts_marketing %}block{% else %}none{% endif %};">
+                        <div class="form-floating">
+                            {{ form.unsubscribe_reason }}
+                            <label class="text-white-50">Unsubscribe Reason</label>
+                        </div>
+                    </div>
                 </div>
+
+                <script>
+                    document.addEventListener('DOMContentLoaded', function () {
+                        const acceptsMarketingCheckbox = document.querySelector('input[name="accepts_marketing"]');
+                        const reasonWrapper = document.getElementById('unsubscribe-reason-wrapper');
+
+                        if (acceptsMarketingCheckbox && reasonWrapper) {
+                            acceptsMarketingCheckbox.addEventListener('change', function () {
+                                if (this.checked) {
+                                    reasonWrapper.style.display = 'none';
+                                } else {
+                                    reasonWrapper.style.display = 'block';
+                                }
+                            });
+                        }
+                    });
+                </script>
 
                 <style>
                     .form-floating>.form-control,

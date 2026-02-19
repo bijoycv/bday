@@ -10,6 +10,7 @@ urlpatterns = [
     path('patients/<int:pk>/delete/', views.patient_delete, name='patient_delete'),
     path('patients/bulk-delete/', views.patient_bulk_delete, name='patient_bulk_delete'),
     path('patients/<int:pk>/toggle-verification/', views.toggle_patient_verification, name='toggle_patient_verification'),
+    path('patients/<int:pk>/toggle-communication/', views.toggle_communication_status, name='toggle_communication_status'),
     
     # Templates
     path('templates/', views.template_list, name='template_list'),
@@ -28,6 +29,7 @@ urlpatterns = [
     # Scheduled
     path('scheduled/<int:pk>/edit/', views.scheduled_update, name='scheduled_update'),
     path('scheduled/<int:pk>/delete/', views.scheduled_delete, name='scheduled_delete'),
+    path('scheduled/bulk-delete/', views.scheduled_bulk_delete, name='scheduled_bulk_delete'),
     
     # Saved Recipients (CC/BCC)
     path('recipients/', views.recipient_list, name='recipient_list'),
@@ -46,6 +48,7 @@ urlpatterns = [
     path('reports/generate/', reports.generate_report, name='generate_report'),
     path('reports/mark-outreach/', reports.mark_outreach_status, name='mark_outreach_status'),
     path('reports/email/', reports.email_report_trigger, name='email_report_trigger'),
+    path('reports/daily-summary/', reports.email_daily_summary_trigger, name='email_daily_summary_trigger'),
     path('scheduled/update-ajax/<int:pk>/', views.scheduled_update_ajax, name='scheduled_update_ajax'),
 
     # SMO Sync
@@ -83,4 +86,7 @@ urlpatterns = [
 
     # Communication Logs
     path('communications/', views.communication_log_list, name='communication_log_list'),
+    path('messages/', views.messages_hub, name='messages_hub'),
+    path('messages/send/', views.send_direct_sms, name='send_direct_sms'),
+    path('messages/twilio/webhook/', views.twilio_sms_webhook, name='twilio_sms_webhook'),
 ]

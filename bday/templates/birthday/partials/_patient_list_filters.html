@@ -1,0 +1,13 @@
+<select name="month" id="month_select" class="form-select w-auto" style="min-width: 140px;">
+    <option value="">All Months</option>
+    {% for m_num, m_name in months %}
+    <option value="{{ m_num }}" {% if month_filter|add:"0" == m_num %}selected{% endif %}>{{ m_name }}</option>
+    {% endfor %}
+</select>
+
+<select name="per_page" id="per_page_select" class="form-select w-auto">
+    <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+    <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+    <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+    <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+</select>

@@ -122,6 +122,28 @@
                                             </div>
                                         </div>
                                     </div>
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <div
+                                                class="icon-square {% if patient.accepts_marketing %}bg-success{% else %}bg-danger{% endif %} bg-opacity-10 text-{% if patient.accepts_marketing %}success{% else %}danger{% endif %} rounded p-2 me-3">
+                                                <i
+                                                    class="bi {% if patient.accepts_marketing %}bi-check-circle{% else %}bi-x-circle{% endif %}"></i>
+                                            </div>
+                                            <div>
+                                                <small class="text-muted d-block uppercase-label">Communications</small>
+                                                <div class="text-white">
+                                                    {% if patient.accepts_marketing %}
+                                                    Enabled
+                                                    {% else %}
+                                                    Disabled
+                                                    <small class="text-white-50 d-block"
+                                                        style="font-size: 0.65rem;">Reason: {{
+                                                        patient.unsubscribe_reason }}</small>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div class="col-12 border-top border-white border-opacity-10 pt-3 mt-1">
                                         <div class="d-flex align-items-start">
                                             <div class="icon-square bg-info bg-opacity-10 text-info rounded p-2 me-3">

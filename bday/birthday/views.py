@@ -4,13 +4,20 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Patient, MessageTemplate, ScheduledWish, SavedRecipient, PatientStatus, EmailSignature, clean_phone_number, PlanHistory, Practice
 from .forms import PatientForm, UploadFileForm, MessageTemplateForm, ScheduledWishForm, SavedRecipientForm, EmailSignatureForm
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 from django.db.models.functions import ExtractMonth, ExtractDay
 import re
 import os
 import requests
+from email.utils import formataddr
+from urllib.parse import quote_plus
 from django.conf import settings
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Exists, OuterRef, Max, Count
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
+from django.urls import reverse
 
 def index(request):
     """
@@ -226,6 +233,19 @@ def patient_list(request):
     plan_filter = request.GET.get('plan', '')
     if plan_filter:
         patients = patients.filter(membership_plan=plan_filter)
+
+    # 3.7. Communication state flags (for quick visual identification in directory)
+    pending_wish_qs = ScheduledWish.objects.filter(patient_id=OuterRef('pk'), status='Pending')
+    sent_wish_qs = ScheduledWish.objects.filter(patient_id=OuterRef('pk'), status='Sent')
+    sent_activity_qs = PatientStatus.objects.filter(
+        patient_id=OuterRef('pk'),
+        activity_type__in=['Email Sent', 'SMS Sent']
+    )
+    patients = patients.annotate(
+        has_pending_wish=Exists(pending_wish_qs),
+        has_sent_wish=Exists(sent_wish_qs),
+        has_sent_activity=Exists(sent_activity_qs),
+    )
 
     # 4. Sorting & Pagination Prep
     sort_mode = request.GET.get('sort', '')
@@ -840,9 +860,6 @@ def patient_bulk_delete(request):
             
     return redirect('patient_list')
 
-from django.http import JsonResponse
-from django.views.decorators.http import require_POST
-
 @require_POST
 def toggle_patient_verification(request, pk):
     """
@@ -856,6 +873,57 @@ def toggle_patient_verification(request, pk):
         'status': 'success', 
         'is_verified': patient.is_verified,
         'message': 'Patient verification status updated.'
+    })
+
+@require_POST
+def toggle_communication_status(request, pk):
+    """
+    Toggle the communication status (accepts_marketing) of a patient with a reason.
+    """
+    import json
+    from django.utils import timezone
+    
+    patient = get_object_or_404(Patient, pk=pk)
+    try:
+        data = json.loads(request.body)
+        reason = data.get('reason', '')
+        status = data.get('status')
+    except json.JSONDecodeError:
+        reason = request.POST.get('reason', '')
+        status = request.POST.get('status') == 'true'
+
+    if status is None:
+        status = not patient.accepts_marketing
+    
+    old_status = patient.accepts_marketing
+    patient.accepts_marketing = status
+    
+    if not status:
+        patient.unsubscribe_reason = reason
+        if not old_status == status: # only update timestamp if status changed
+            patient.unsubscribed_at = timezone.now()
+        activity_type = 'Opt-out'
+        description = f"Opted out. Reason: {reason}" if reason else "Opted out of communications."
+    else:
+        patient.unsubscribe_reason = ""
+        patient.unsubscribed_at = None
+        activity_type = 'Opt-in'
+        description = "Opted back into communications."
+        
+    patient.save()
+    
+    # Log activity
+    from .models import PatientStatus
+    PatientStatus.objects.create(
+        patient=patient,
+        activity_type=activity_type,
+        description=description
+    )
+    
+    return JsonResponse({
+        'status': 'success', 
+        'accepts_marketing': patient.accepts_marketing,
+        'message': f'Communication status updated to {"Enabled" if status else "Disabled"}.'
     })
 
 # --- Template Management Views ---
@@ -947,193 +1015,234 @@ def quick_send_message(request):
     """Handle quick message sending from the patient list modal."""
     if request.method == 'POST':
         patient_id = request.POST.get('patient_id')
-        message_type = request.POST.get('message_type', 'Email')
+        channels = request.POST.getlist('channels')
         subject = request.POST.get('subject', '')
         body = request.POST.get('body', '')
-        # CC/BCC handled below
+        
+        if not channels:
+            messages.error(request, "Please select at least one channel (Email or SMS).")
+            return redirect('patient_list')
         
         patient = get_object_or_404(Patient, pk=patient_id)
         
-        # Replace placeholders in subject and body
-        subject = subject.replace('{first_name}', patient.first_name)
-        subject = subject.replace('{last_name}', patient.last_name)
-        
-        body = body.replace('{first_name}', patient.first_name)
-        body = body.replace('{last_name}', patient.last_name)
-        
-        signature_id = request.POST.get('signature_id')
-        custom_signature_content = request.POST.get('custom_signature_content', '')
-        signature_content = ""
-        
-        if custom_signature_content and message_type == 'Email':
-            signature_content = custom_signature_content
-        elif signature_id and message_type == 'Email':
-            try:
-                sig = EmailSignature.objects.get(pk=signature_id)
-                signature_content = sig.content
-            except EmailSignature.DoesNotExist:
-                pass
+        if not patient.accepts_marketing:
+            messages.error(request, f"Cannot send message: {patient.first_name} has opted out of communications.")
+            return redirect('patient_list')
+
+        # Baseline template if selected
+        template_id = request.POST.get('template_id')
+        base_template = MessageTemplate.objects.filter(pk=template_id).first() if template_id else None
         
         # Determine if we are Scheduling or Sending Now
         is_scheduled = 'schedule_now' in request.POST
         
+        cc_list = request.POST.getlist('cc_recipients')
+        bcc_list = request.POST.getlist('bcc_recipients')
+        
+        # Signature logic
+        signature_id = request.POST.get('signature_id')
+        custom_signature_content = request.POST.get('custom_signature_content', '')
+        signature_content = ""
+        if 'Email' in channels:
+            if custom_signature_content:
+                signature_content = custom_signature_content
+            elif signature_id:
+                sig = EmailSignature.objects.filter(pk=signature_id).first()
+                if sig: signature_content = sig.content
+
+        # Handle Scheduling Time
+        tz = pytz.timezone('America/Los_Angeles')
+        target_date = None
+        scheduled_dt = None
+        
         if is_scheduled:
-            # Handle Scheduling
-            
-            # Use 'America/Los_Angeles' as requested
-            tz = pytz.timezone('America/Los_Angeles')
-            today = datetime.now(tz).date()
-            
-            # Default to next birthday 6am if no date provided? 
-            # Or use specific date input from form if we add it?
-            # For this request "morning 6.00 clock california time", 
-            # let's assume if it's a birthday wish, it's next birthday.
-            next_bday = patient.dob
-            try:
-                this_year_bday = next_bday.replace(year=today.year)
-            except ValueError:
-                this_year_bday = next_bday.replace(month=3, day=1, year=today.year)
-            
-            if this_year_bday < today:
-                try:
-                    target_date = next_bday.replace(year=today.year + 1)
-                except ValueError:
-                    target_date = next_bday.replace(month=3, day=1, year=today.year + 1)
-            else:
-                target_date = this_year_bday
-                
-            # Create scheduled Datetime: Target Date at Selected Time (PST)
-            # Combine Date + Time
+            from datetime import time
+            now = datetime.now(tz)
             schedule_time_str = request.POST.get('schedule_time', '06:00')
             try:
-                # Parse HH:MM
                 h, m = map(int, schedule_time_str.split(':'))
-                target_time = datetime.min.time().replace(hour=h, minute=m)
-            except (ValueError, AttributeError):
-                target_time = datetime.min.time().replace(hour=6, minute=0)
+                target_time = time(hour=h, minute=m)
+            except:
+                target_time = time(hour=6, minute=0)
 
-            naive_dt = datetime.combine(target_date, target_time)
-            scheduled_dt = tz.localize(naive_dt)
-
-            cc_list = request.POST.getlist('cc_recipients')
-            bcc_list = request.POST.getlist('bcc_recipients')
-            
-            # If we have a template in context (which we don't directly here easily without lookup, 
-            # we'll create a ScheduledWish without a template_id foreign key but potentially store content?
-            # The ScheduledWish model expects a 'template' FK. 
-            # If this is a custom message, we might need a "Custom" template or allow null.
-            # Model definition: template = models.ForeignKey(..., null=True, blank=True) -> Good.
-            
-            # We need to store the Body somewhere. The current ScheduledWish model 
-            # might not have a free-text body field if it relies solely on Template FK.
-            # Checking model: ScheduledWish has NO 'body' field, only 'template'.
-            # To support custom body scheduling, we need to add a body field to ScheduledWish or 
-            # create a temporary template.
-            # For now, let's try to find if a template was selected.
-            template_id = request.POST.get('template_id')
-            template_obj = None
-            if template_id:
-                template_obj = MessageTemplate.objects.filter(pk=template_id).first()
-            
-            # If no template object, we can't save the custom body in the current schema 
-            # without modifying ScheduledWish.
-            # Let's assume for this specific request we might need to modify the model 
-            # OR we just rely on the selected template. 
-            # If the user edited the body in the editor, that edit is lost if we only save the Template ID.
-            
-            # *** CRITICAL: To support edited messages, we should add 'custom_body' and 'custom_subject' to ScheduledWish.
-            # Check models.py again in next step if needed. 
-            # For now, saving what we can.
-            
-            ScheduledWish.objects.create(
-                patient=patient,
-                template=template_obj,
-                custom_subject=subject,
-                custom_body=body,
-                scheduled_for=scheduled_dt,
-                status='Pending',
-                cc_recipients=",".join(cc_list),
-                bcc_recipients=",".join(bcc_list)
-            )
-            
-            messages.success(request, f'Message scheduled for {target_date.strftime("%b %d, %Y")} at {schedule_time_str} (CA Time).')
-            return redirect('patient_list')
-
-        # Send Now Logic
-        if message_type == 'Email':
-            from django.core.mail import EmailMessage
+            # Calculate next birthday date
+            bday = patient.dob
+            if not bday:
+                messages.error(request, "Patient has no date of birth. Cannot schedule birthday wish.")
+                return redirect('patient_list')
+                
             try:
-                # Get CC/BCC lists from checkboxes
-                cc_list = request.POST.getlist('cc_recipients')
-                bcc_list = request.POST.getlist('bcc_recipients')
-                
-                # Check if body is already HTML (from Quill editor)
-                # If it contains HTML tags, don't add extra <br> for newlines
-                if '<p>' in body or '<br>' in body or '<div>' in body:
-                    html_body = body
-                    # Fix Quill's paragraph spacing - add inline style to remove margins
-                    html_body = html_body.replace('<p>', '<p style="margin:0;padding:0;">')
-                else:
-                    # Plain text - convert newlines to HTML
-                    html_body = body.replace('\n', '<br>')
-                
-                # Append signature with minimal spacing
-                if signature_content:
-                    # Also fix paragraph spacing in signature
-                    fixed_signature = signature_content.replace('<p>', '<p style="margin:0;padding:0;">')
-                    html_body += "<br>" + fixed_signature
-                
-                email = EmailMessage(
-                    subject=subject,
-                    body=html_body,
-                    from_email=None,
-                    to=[patient.email],
-                    cc=cc_list,
-                    bcc=bcc_list,
-                )
-                email.content_subtype = "html"  # Main content is now text/html
-                email.send(fail_silently=False)
-                
-                # Full content for logging
-                log_content = body
-                if signature_content:
-                    log_content += "\n\n---\nSignature: " + signature_content
-                
-                # Record activity
-                PatientStatus.objects.create(
-                    patient=patient,
-                    activity_type='Email Sent',
-                    description=f"Subject: {subject}",
-                    full_content=log_content
-                )
-                
-                messages.success(request, f'Email sent successfully to {patient.first_name}!')
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                messages.error(request, f'Failed to send email: {str(e)}')
-        else:
-            # Twilio SMS Logic
-            from .utils import send_sms
+                target_date = bday.replace(year=now.year)
+            except ValueError: # Leap year
+                target_date = bday.replace(month=3, day=1, year=now.year)
             
-            # Use the body directly
-            # If body contains HTML (from Quill), strip tags for SMS
-            import re
-            clean_body = re.sub('<[^<]+?>', '', body) # Basic strip tags
+            if target_date < now.date():
+                try:
+                    target_date = target_date.replace(year=now.year + 1)
+                except ValueError:
+                    target_date = target_date.replace(month=3, day=1, year=now.year + 1)
             
-            success, result_sid = send_sms(patient.phone, clean_body)
-            
-            if success:
-                PatientStatus.objects.create(
-                    patient=patient,
-                    activity_type='SMS Sent',
-                    description=f"Message: {clean_body[:50]}...",
-                    full_content=clean_body
-                )
-                messages.success(request, f'SMS sent successfully to {patient.phone}!')
+            scheduled_dt = tz.localize(datetime.combine(target_date, target_time))
+
+        success_count = 0
+        for channel in channels:
+            # Find closest matching template for this channel if none provided or if base doesn't match
+            chan_template = base_template
+            if base_template and base_template.type != channel:
+                # Robust sister template lookup:
+                # If current is "B'Day - Regular - Email", look for something like "B'Day - Regular" + "Msg"
+                prefix = base_template.name
+                for s in [' - Email', ' (Email)', ' - Msg', ' (SMS)']:
+                    if s in prefix:
+                        prefix = prefix.split(s)[0].strip()
+                        break
+                
+                sister = MessageTemplate.objects.filter(type=channel, name__icontains=prefix).first()
+                if sister:
+                    chan_template = sister
+
+            # IMPORTANT:
+            # The modal has a single body editor. When both channels are selected, that shared body
+            # can represent only one channel at a time in the UI. For dual-channel scheduling, use
+            # the resolved per-channel template content to avoid SMS body leaking into Email.
+            if len(channels) > 1 and chan_template:
+                raw_subject = chan_template.subject or subject
+                raw_body = chan_template.body or body
             else:
-                messages.error(request, f'Failed to send SMS: {result_sid}')
-        
+                raw_subject = subject
+                raw_body = body
+
+            chan_subject = (raw_subject or '').replace('{first_name}', patient.first_name).replace('{last_name}', patient.last_name)
+            chan_body = (raw_body or '').replace('{first_name}', patient.first_name).replace('{last_name}', patient.last_name)
+
+            # For Scheduled Email wishes, we must bake the signature into the body
+            # because ScheduledWish doesn't have a separate signature field, 
+            # and tasks.py only falls back to the *template's* default signature.
+            final_body = chan_body
+            if channel == 'Email' and signature_content:
+                # Add signature with some spacing, but ONLY if not already present
+                # Use a simple check to avoid duplication if retrying or if client sent it
+                sig_snippet = signature_content[:20] if len(signature_content) > 20 else signature_content
+                if sig_snippet and sig_snippet not in final_body:
+                    # usage of a marker allows frontend to separate them for display
+                    marker = '<div id="sig-separator" style="display:none;">--signature--</div>'
+                    if '<p>' in final_body:
+                        final_body += f"{marker}<br>{signature_content}"
+                    else:
+                        final_body += f"{marker}\n\n{signature_content}"
+            
+            if is_scheduled:
+                ScheduledWish.objects.create(
+                    patient=patient,
+                    template=chan_template,
+                    channel=channel,
+                    custom_subject=chan_subject if channel == 'Email' else "",
+                    custom_body=final_body,
+                    scheduled_for=scheduled_dt,
+                    status='Pending',
+                    cc_recipients=",".join(cc_list) if channel == 'Email' else "",
+                    bcc_recipients=",".join(bcc_list) if channel == 'Email' else ""
+                )
+                success_count += 1
+            else:
+                # Send Now logic
+                if channel == 'Email':
+                    from django.core.mail import EmailMessage
+                    html_body = chan_body
+                    if '<p>' in html_body or '<br>' in html_body:
+                        html_body = html_body.replace('<p>', '<p style="margin:0;padding:0;">')
+                    else:
+                        html_body = html_body.replace('\n', '<br>')
+                    
+                    if signature_content:
+                        html_body += "<br>" + signature_content.replace('<p>', '<p style="margin:0;padding:0;">')
+
+                    email = EmailMessage(
+                        subject=chan_subject,
+                        body=html_body,
+                        from_email=formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL)),
+                        to=[patient.email],
+                        cc=cc_list,
+                        bcc=bcc_list,
+                    )
+                    email.content_subtype = "html"
+                    email.send(fail_silently=False)
+                    
+                    PatientStatus.objects.create(
+                        patient=patient,
+                        activity_type='Email Sent',
+                        description=chan_subject,
+                        full_content=html_body
+                    )
+                    CommunicationLog.objects.create(
+                        patient=patient,
+                        channel='Email',
+                        direction='Outbound',
+                        status='Sent',
+                        subject=chan_subject,
+                        body=html_body,
+                        recipient=patient.email,
+                        sent_at=datetime.now()
+                    )
+                    success_count += 1
+                else:  # SMS
+                    from .utils import send_sms 
+                    import re
+                    import html
+                    
+                    # Convert HTML structure to plain text
+                    text_content = chan_body.replace('</p>', '\n\n')
+                    text_content = text_content.replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n')
+                    text_content = text_content.replace('</div>', '\n')
+                    
+                    # Strip all other tags
+                    clean_body = re.sub('<[^<]+?>', '', text_content)
+                    
+                    # Decode HTML entities (e.g. &nbsp; -> space)
+                    clean_body = html.unescape(clean_body)
+                    
+                    # Normalize whitespace (limit to 2 consecutive newlines)
+                    clean_body = re.sub(r'\n{3,}', '\n\n', clean_body).strip()
+                    
+                    success, result = send_sms(patient.phone, clean_body)
+                    if success:
+                        PatientStatus.objects.create(
+                            patient=patient,
+                            activity_type='SMS Sent',
+                            description=f"Quick SMS: {clean_body[:50]}...",
+                            full_content=clean_body
+                        )
+                        CommunicationLog.objects.create(
+                            patient=patient,
+                            channel='SMS',
+                            direction='Outbound',
+                            status='Sent',
+                            body=clean_body,
+                            recipient=patient.phone,
+                            external_message_id=result,
+                            gateway_number=os.getenv('TWILIO_PHONE_NUMBER'),
+                            sent_at=datetime.now()
+                        )
+                        success_count += 1
+                    else:
+                        CommunicationLog.objects.create(
+                            patient=patient,
+                            channel='SMS',
+                            direction='Outbound',
+                            status='Failed',
+                            body=clean_body,
+                            recipient=patient.phone,
+                            error_message=result,
+                            gateway_number=os.getenv('TWILIO_PHONE_NUMBER')
+                        )
+                        messages.error(request, f"Failed to send SMS: {result}")
+
+        if success_count > 0:
+            if is_scheduled:
+                messages.success(request, f'Successfully scheduled {success_count} birthday wish(es) for {target_date.strftime("%b %d, %Y")}.')
+            else:
+                messages.success(request, f'Successfully sent {success_count} message(s).')
+            
     return redirect('patient_list')
 
 # --- Saved Recipient (CC/BCC) CRUD ---
@@ -1227,6 +1336,20 @@ def scheduled_delete(request, pk):
     if request.method == 'POST':
         wish.delete()
         messages.success(request, 'Scheduled wish removed successfully!')
+    return redirect('scheduled_list')
+
+def scheduled_bulk_delete(request):
+    if request.method == 'POST':
+        selected_ids = request.POST.getlist('selected_wishes')
+        if selected_ids:
+            # Filter and delete
+            wishes = ScheduledWish.objects.filter(pk__in=selected_ids)
+            count = wishes.count()
+            wishes.delete()
+            messages.success(request, f'Successfully deleted {count} scheduled wish(es).')
+        else:
+            messages.warning(request, 'No wishes selected for deletion.')
+            
     return redirect('scheduled_list')
 
 @require_POST
@@ -1385,7 +1508,6 @@ def delete_practice(request, practice_id):
     messages.success(request, f"Practice '{name}' removed successfully.")
     return redirect('patient_list')
 
-from django.views.decorators.http import require_POST
 import json
 
 def preview_sync_patients(request, practice_id):
@@ -1999,3 +2121,363 @@ def communication_log_list(request):
         'channel': channel,
         'status': status,
     })
+
+
+def _to_e164(number):
+    """Normalize phone numbers for Twilio comparisons (+1XXXXXXXXXX)."""
+    if not number:
+        return ''
+    raw = str(number).strip()
+    digits = ''.join(ch for ch in raw if ch.isdigit())
+    if len(digits) == 10:
+        return f'+1{digits}'
+    if len(digits) == 11 and digits.startswith('1'):
+        return f'+{digits}'
+    return raw if raw.startswith('+') else f'+{digits}' if digits else raw
+
+
+def _fetch_twilio_sms_feed(limit=120):
+    """
+    Fetch recent Twilio SMS messages (both sent and received) for UI display.
+    Returns (messages, error_text).
+    """
+    account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+    auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+    twilio_number = _to_e164(os.getenv('TWILIO_PHONE_NUMBER', ''))
+    if not account_sid or not auth_token or not twilio_number:
+        return [], 'Twilio credentials or number are missing in .env'
+
+    try:
+        from twilio.rest import Client
+        client = Client(account_sid, auth_token)
+
+        inbound = client.messages.list(to=twilio_number, limit=limit)
+        outbound = client.messages.list(from_=twilio_number, limit=limit)
+
+        merged = {}
+        for msg in list(inbound) + list(outbound):
+            sid = getattr(msg, 'sid', None) or f"tmp-{id(msg)}"
+            msg_from = _to_e164(getattr(msg, 'from_', ''))
+            msg_to = _to_e164(getattr(msg, 'to', ''))
+            direction = 'Outbound' if msg_from == twilio_number else 'Inbound'
+            created_at = getattr(msg, 'date_sent', None) or getattr(msg, 'date_created', None) or timezone.now()
+            merged[sid] = {
+                'sid': sid,
+                'from_number': msg_from,
+                'to_number': msg_to,
+                'direction': direction,
+                'status': (getattr(msg, 'status', '') or '').title(),
+                'body': getattr(msg, 'body', '') or '',
+                'created_at': created_at,
+                'gateway_number': twilio_number,
+            }
+
+        feed = sorted(merged.values(), key=lambda x: x['created_at'], reverse=True)
+        return feed, None
+    except Exception as exc:
+        return [], f'Unable to fetch live Twilio feed: {exc}'
+
+
+def messages_hub(request):
+    """Professional SMS command-center view with patient + raw-number conversations."""
+    local_logs = list(
+        CommunicationLog.objects.filter(channel='SMS')
+        .select_related('patient')
+        .order_by('-created_at')[:500]
+    )
+    twilio_feed, twilio_fetch_error = _fetch_twilio_sms_feed(limit=120)
+
+    patient_by_phone = {}
+    for patient in Patient.objects.exclude(phone__isnull=True).exclude(phone=''):
+        patient_by_phone[_to_e164(patient.phone)] = patient
+
+    thread_map = {}
+
+    def _thread_key(patient=None, phone=''):
+        if patient:
+            return f"p:{patient.id}"
+        return f"n:{_to_e164(phone)}"
+
+    def _thread_url(patient=None, phone=''):
+        if patient:
+            return f"{reverse('messages_hub')}?patient={patient.id}"
+        return f"{reverse('messages_hub')}?phone={quote_plus(_to_e164(phone))}"
+
+    def _display_name(patient=None, phone=''):
+        if patient:
+            return f"{patient.first_name} {patient.last_name}".strip()
+        return _to_e164(phone) or "Unknown Number"
+
+    def _touch_thread(patient=None, phone='', created_at=None, preview=''):
+        key = _thread_key(patient=patient, phone=phone)
+        if key not in thread_map:
+            thread_map[key] = {
+                'key': key,
+                'patient': patient,
+                'phone': _to_e164(phone or (patient.phone if patient else '')),
+                'display_name': _display_name(patient=patient, phone=phone),
+                'last_message_at': created_at or timezone.now(),
+                'total_messages': 0,
+                'last_preview': '',
+                'url': _thread_url(patient=patient, phone=phone),
+            }
+        thread = thread_map[key]
+        thread['total_messages'] += 1
+        if created_at and created_at >= thread['last_message_at']:
+            thread['last_message_at'] = created_at
+            thread['last_preview'] = preview or thread['last_preview']
+        elif not thread['last_preview'] and preview:
+            thread['last_preview'] = preview
+        return thread
+
+    for log in local_logs:
+        other_phone = log.patient.phone if log.patient_id and log.patient else log.recipient
+        preview = (log.body or '')[:90]
+        if len(log.body or '') > 90:
+            preview += '...'
+        _touch_thread(
+            patient=log.patient if log.patient_id else None,
+            phone=other_phone,
+            created_at=log.created_at,
+            preview=preview
+        )
+
+    for item in twilio_feed:
+        other_number = item['to_number'] if item['direction'] == 'Outbound' else item['from_number']
+        patient = patient_by_phone.get(_to_e164(other_number))
+        preview = (item['body'] or '')[:90]
+        if len(item['body'] or '') > 90:
+            preview += '...'
+        _touch_thread(
+            patient=patient,
+            phone=other_number,
+            created_at=item['created_at'],
+            preview=preview
+        )
+
+    threads = sorted(
+        [t for t in thread_map.values() if t.get('phone')],
+        key=lambda t: t['last_message_at'],
+        reverse=True
+    )
+
+    selected_patient_id = request.GET.get('patient', '').strip()
+    selected_phone = _to_e164(request.GET.get('phone', '').strip())
+    if not selected_patient_id and not selected_phone and threads:
+        first = threads[0]
+        if first.get('patient'):
+            selected_patient_id = str(first['patient'].id)
+        else:
+            selected_phone = first.get('phone', '')
+
+    selected_patient = None
+    conversation = []
+    selected_target_phone = selected_phone
+    if selected_patient_id:
+        try:
+            selected_patient = Patient.objects.get(pk=int(selected_patient_id))
+            selected_target_phone = _to_e164(selected_patient.phone)
+        except (ValueError, Patient.DoesNotExist):
+            selected_patient = None
+            selected_target_phone = selected_phone
+
+    if selected_target_phone:
+        local_q = Q(recipient__icontains=clean_phone_number(selected_target_phone))
+        if selected_patient:
+            local_q = Q(patient=selected_patient) | local_q
+        local_conversation = CommunicationLog.objects.filter(channel='SMS').filter(local_q).order_by('created_at')
+
+        local_external_ids = set()
+        for log in local_conversation:
+            if log.external_message_id:
+                local_external_ids.add(log.external_message_id)
+            direction = log.direction or 'Outbound'
+            conversation.append({
+                'direction': direction,
+                'status': log.status,
+                'body': log.body,
+                'created_at': log.created_at,
+                'from_number': log.gateway_number if direction == 'Outbound' else log.recipient,
+                'to_number': log.recipient if direction == 'Outbound' else log.gateway_number,
+                'source': 'Local',
+            })
+
+        for item in twilio_feed:
+            sid = item.get('sid')
+            if sid and sid in local_external_ids:
+                continue
+            other_number = item['to_number'] if item['direction'] == 'Outbound' else item['from_number']
+            if _to_e164(other_number) != selected_target_phone:
+                continue
+            conversation.append({
+                'direction': item['direction'],
+                'status': item['status'] or 'Unknown',
+                'body': item['body'],
+                'created_at': item['created_at'],
+                'from_number': item['from_number'],
+                'to_number': item['to_number'],
+                'source': 'Twilio',
+            })
+
+        conversation.sort(key=lambda x: x['created_at'])
+
+    selected_thread_key = ''
+    if selected_patient:
+        selected_thread_key = f"p:{selected_patient.id}"
+    elif selected_target_phone:
+        selected_thread_key = f"n:{selected_target_phone}"
+
+    phone_lookup = request.GET.get('lookup', '').strip()
+    found_patient_for_lookup = None
+    lookup_phone_normalized = ''
+    if phone_lookup:
+        lookup_phone_normalized = _to_e164(phone_lookup)
+        found_patient_for_lookup = patient_by_phone.get(lookup_phone_normalized)
+        if not found_patient_for_lookup:
+            found_patient_for_lookup = Patient.objects.filter(phone=clean_phone_number(lookup_phone_normalized)).first()
+            if found_patient_for_lookup:
+                lookup_phone_normalized = _to_e164(found_patient_for_lookup.phone)
+
+    twilio_number = _to_e164(os.getenv('TWILIO_PHONE_NUMBER', ''))
+    selectable_patients = Patient.objects.order_by('first_name', 'last_name')[:500]
+
+    today = timezone.localdate()
+    def _feed_date(item):
+        dt = item.get('created_at')
+        if not dt:
+            return None
+        if timezone.is_naive(dt):
+            return dt.date()
+        return timezone.localtime(dt).date()
+
+    sent_today = sum(1 for x in twilio_feed if x['direction'] == 'Outbound' and _feed_date(x) == today)
+    received_today = sum(1 for x in twilio_feed if x['direction'] == 'Inbound' and _feed_date(x) == today)
+    delivered_today = sum(1 for x in twilio_feed if (x['status'] or '').lower() in ['delivered', 'sent'])
+    failed_today = sum(1 for x in twilio_feed if (x['status'] or '').lower() in ['failed', 'undelivered'])
+
+    return render(request, 'birthday/communications/messages_hub.html', {
+        'threads': threads,
+        'selected_patient': selected_patient,
+        'selected_phone': selected_target_phone,
+        'selected_thread_key': selected_thread_key,
+        'conversation': conversation,
+        'twilio_number': twilio_number,
+        'selectable_patients': selectable_patients,
+        'twilio_feed': twilio_feed[:40],
+        'twilio_fetch_error': twilio_fetch_error,
+        'sent_today': sent_today,
+        'received_today': received_today,
+        'delivered_today': delivered_today,
+        'failed_today': failed_today,
+        'phone_lookup': phone_lookup,
+        'found_patient_for_lookup': found_patient_for_lookup,
+        'lookup_phone_normalized': lookup_phone_normalized,
+    })
+
+
+@require_POST
+def send_direct_sms(request):
+    """Send direct SMS by patient selection or raw contact number."""
+    patient_id = (request.POST.get('patient_id') or '').strip()
+    phone_number_input = (request.POST.get('phone_number') or '').strip()
+    message_body = (request.POST.get('message_body') or '').strip()
+
+    if not message_body:
+        messages.error(request, 'Please enter a message.')
+        return redirect('messages_hub')
+
+    patient = None
+    target_phone = ''
+    if patient_id:
+        patient = get_object_or_404(Patient, pk=patient_id)
+        target_phone = patient.phone or ''
+    elif phone_number_input:
+        target_phone = phone_number_input
+        normalized = _to_e164(phone_number_input)
+        matched = Patient.objects.filter(phone=clean_phone_number(normalized)).first()
+        if matched:
+            patient = matched
+            target_phone = matched.phone
+    else:
+        messages.error(request, 'Select a patient or enter a phone number.')
+        return redirect('messages_hub')
+
+    if not target_phone:
+        messages.error(request, 'No valid phone number found.')
+        return redirect('messages_hub')
+
+    from .utils import send_sms
+    success, result = send_sms(target_phone, message_body)
+    recipient_phone = _to_e164(target_phone)
+
+    if success:
+        if patient:
+            PatientStatus.objects.create(
+                patient=patient,
+                activity_type='SMS Sent',
+                description=f"Direct SMS: {message_body[:50]}...",
+                full_content=message_body
+            )
+        CommunicationLog.objects.create(
+            patient=patient,
+            channel='SMS',
+            direction='Outbound',
+            status='Sent',
+            body=message_body,
+            recipient=recipient_phone,
+            external_message_id=result,
+            gateway_number=os.getenv('TWILIO_PHONE_NUMBER'),
+            sent_at=datetime.now()
+        )
+        messages.success(request, 'SMS sent successfully.')
+    else:
+        CommunicationLog.objects.create(
+            patient=patient,
+            channel='SMS',
+            direction='Outbound',
+            status='Failed',
+            body=message_body,
+            recipient=recipient_phone,
+            error_message=result,
+            gateway_number=os.getenv('TWILIO_PHONE_NUMBER')
+        )
+        messages.error(request, f'Failed to send SMS: {result}')
+
+    if patient:
+        return redirect(f"{reverse('messages_hub')}?patient={patient.id}")
+    return redirect(f"{reverse('messages_hub')}?phone={quote_plus(recipient_phone)}")
+
+
+@csrf_exempt
+def twilio_sms_webhook(request):
+    """
+    Twilio inbound webhook: records incoming SMS into CommunicationLog.
+    Configure this URL in Twilio for your messaging number.
+    """
+    if request.method != 'POST':
+        return HttpResponse(status=405)
+
+    from_number = (request.POST.get('From') or '').strip()
+    to_number = (request.POST.get('To') or '').strip()
+    body = (request.POST.get('Body') or '').strip()
+    message_sid = (request.POST.get('MessageSid') or '').strip()
+
+    if not from_number or not body:
+        return HttpResponse('<Response></Response>', content_type='text/xml')
+
+    normalized_from = clean_phone_number(from_number)
+    patient = Patient.objects.filter(phone=normalized_from).first()
+
+    if patient:
+        CommunicationLog.objects.create(
+            patient=patient,
+            channel='SMS',
+            direction='Inbound',
+            status='Sent',
+            body=body,
+            recipient=from_number,
+            external_message_id=message_sid or None,
+            gateway_number=to_number or os.getenv('TWILIO_PHONE_NUMBER')
+        )
+
+    return HttpResponse('<Response></Response>', content_type='text/xml')

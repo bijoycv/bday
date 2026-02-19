@@ -67,6 +67,12 @@ class Patient(models.Model):
     
     enrollment_date = models.DateField(blank=True, null=True, verbose_name="Enrollment Date")
     is_verified = models.BooleanField(default=False, verbose_name="Verified")
+    
+    # Opt-out fields
+    accepts_marketing = models.BooleanField(default=True, verbose_name="Accepts Communications")
+    unsubscribe_reason = models.TextField(blank=True, null=True, verbose_name="Unsubscribe Reason")
+    unsubscribed_at = models.DateTimeField(blank=True, null=True, verbose_name="Unsubscribed Date")
+
     # payment_amount was replaced by payment_method as per requirements for Cash/Credit Card standardization
     # payment_amount = models.CharField(max_length=50, blank=True, null=True, verbose_name="Payment Amount")
 
@@ -222,6 +228,12 @@ class ScheduledWish(models.Model):
     
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='scheduled_wishes')
     template = models.ForeignKey(MessageTemplate, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    CHANNEL_CHOICES = [
+        ('Email', 'Email'),
+        ('SMS', 'SMS'),
+    ]
+    channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES, default='Email')
     scheduled_for = models.DateTimeField(verbose_name="Scheduled For")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
     sent_at = models.DateTimeField(blank=True, null=True)
@@ -270,6 +282,8 @@ class PatientStatus(models.Model):
         ('SMS Sent', 'SMS Sent'),
         ('Plan Updated', 'Plan Updated'),
         ('Details Updated', 'Details Updated'),
+        ('Opt-out', 'Communication Opt-out'),
+        ('Opt-in', 'Communication Opt-in'),
     ]
     
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='activities')
@@ -443,15 +457,22 @@ class CommunicationLog(models.Model):
         ('Failed', 'Failed'),
         ('Pending', 'Pending'),
     ]
+    DIRECTION_CHOICES = [
+        ('Outbound', 'Outbound'),
+        ('Inbound', 'Inbound'),
+    ]
     
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='communications')
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='communications', null=True, blank=True)
     campaign = models.ForeignKey(Campaign, on_delete=models.SET_NULL, null=True, blank=True)
     channel = models.CharField(max_length=20, choices=CHANNEL_CHOICES)
+    direction = models.CharField(max_length=20, choices=DIRECTION_CHOICES, default='Outbound')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
     
     subject = models.CharField(max_length=200, blank=True, null=True)
     body = models.TextField()
     recipient = models.CharField(max_length=200)  # Email or phone number
+    external_message_id = models.CharField(max_length=100, blank=True, null=True)
+    gateway_number = models.CharField(max_length=30, blank=True, null=True, help_text="Twilio number used for this SMS")
     
     sent_at = models.DateTimeField(blank=True, null=True)
     error_message = models.TextField(blank=True, null=True)
