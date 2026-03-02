@@ -215,11 +215,27 @@
                     aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
-                <div class="mb-4">
-                    <label class="form-label text-white-50 small text-uppercase fw-bold">Recipient Email</label>
-                    <input type="email" id="targetEmail"
+                <div class="mb-3">
+                    <label class="form-label text-white-50 small text-uppercase fw-bold">Recipient Email(s)</label>
+                    <input type="text" id="targetEmail"
                         class="form-control bg-white bg-opacity-10 border-white border-opacity-10 text-white"
-                        placeholder="e.g., manager@example.com" value="{{ recipient_email|default:'' }}">
+                        placeholder="e.g., manager@example.com, info@example.com"
+                        value="{{ recipient_email|default:'' }}">
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-6">
+                        <label class="form-label text-white-50 small text-uppercase fw-bold">CC</label>
+                        <input type="text" id="targetCC"
+                            class="form-control bg-white bg-opacity-10 border-white border-opacity-10 text-white"
+                            placeholder="Optional CC">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-white-50 small text-uppercase fw-bold">BCC</label>
+                        <input type="text" id="targetBCC"
+                            class="form-control bg-white bg-opacity-10 border-white border-opacity-10 text-white"
+                            placeholder="Optional BCC">
+                    </div>
                 </div>
 
                 <div class="email-preview-scroll"
@@ -231,11 +247,11 @@
                     <div class="text-white small mb-3" style="font-size: 0.9rem;">
                         <strong>Hi Ma’am,</strong><br><br>
                         {% if report_type == 'birthday' %}
-                        Sharing the birthday greeting summary for last week ({{ start_date|date:"F d" }} – {{ end_date|date:"F d, Y" }}). 
+                        Sharing the birthday greeting summary for last week ({{ start_date|date:"F d" }} – {{end_date|date:"F d, Y" }}).
                         During this period, we sent birthday greetings to the following
                         patients on behalf of the <strong>Office of Keerthi Senthil DDS, MS</strong>.
                         {% else %}
-                        Sharing the plan expiration summary for next week ({{ start_date|date:"F d" }} – {{ end_date|date:"F d, Y" }}). 
+                        Sharing the plan expiration summary for next week ({{ start_date|date:"F d" }} – {{end_date|date:"F d, Y" }}).
                         The following Proceed plans are set to expire during this period.
                         {% endif %}
                     </div>
@@ -345,13 +361,15 @@
             const btn = $(this);
             const originalHtml = btn.html();
             const targetEmail = $('#targetEmail').val();
+            const targetCC = $('#targetCC').val();
+            const targetBCC = $('#targetBCC').val();
             const period = "{{ period }}";
             const toastEl = document.getElementById('emailToast');
             const toast = new bootstrap.Toast(toastEl);
             const toastMsg = $('#toastMessage');
 
-            if (!targetEmail || !targetEmail.includes('@')) {
-                alert('Please enter a valid email address.');
+            if (!targetEmail) {
+                alert('Please enter at least one recipient email address.');
                 return;
             }
 
@@ -362,6 +380,8 @@
                 data: {
                     'period': period,
                     'email': targetEmail,
+                    'cc': targetCC,
+                    'bcc': targetBCC,
                     'type': '{{ report_type }}'
                 },
                 success: function (response) {

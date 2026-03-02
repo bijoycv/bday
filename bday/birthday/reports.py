@@ -212,7 +212,7 @@ from django.core.mail import EmailMessage
 from django.conf import settings
 from email.utils import formataddr
 
-def send_report_email(period='weekly', report_type='birthday', recipient_list=None):
+def send_report_email(period='weekly', report_type='birthday', recipient_list=None, cc_list=None, bcc_list=None):
     """Function to send the report as an HTML email."""
     if not recipient_list:
         admin_email = "bijoy@sivasolutions.com"
@@ -229,10 +229,12 @@ def send_report_email(period='weekly', report_type='birthday', recipient_list=No
     subject = f"{context['title']} - {context['generated_at'].strftime('%b %d, %Y')}"
     
     email = EmailMessage(
-        subject,
-        html_content,
-        formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL)),
-        recipient_list
+        subject=subject,
+        body=html_content,
+        from_email=formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL)),
+        to=recipient_list,
+        cc=cc_list,
+        bcc=bcc_list
     )
     email.content_subtype = "html"
     email.send()
@@ -242,12 +244,25 @@ def email_report_trigger(request):
     """View trigger to manually test the email report."""
     period = request.GET.get('period', 'weekly')
     report_type = request.GET.get('type', 'birthday')
-    recipient = request.GET.get('email', "bijoy@sivasolutions.com")
     
-    success = send_report_email(period, report_type, [recipient])
+    # Helper to parse multiple emails from comma-separated string
+    def parse_emails(email_str):
+        if not email_str:
+            return []
+        return [e.strip() for e in email_str.split(',') if e.strip()]
+
+    recipients = parse_emails(request.GET.get('email', "bijoy@sivasolutions.com"))
+    cc_list = parse_emails(request.GET.get('cc', ''))
+    bcc_list = parse_emails(request.GET.get('bcc', ''))
+    
+    if not recipients:
+        recipients = ["bijoy@sivasolutions.com"]
+
+    success = send_report_email(period, report_type, recipients, cc_list, bcc_list)
     
     if success:
-        return JsonResponse({'status': 'success', 'message': f'Report email sent to {recipient}'})
+        recipient_display = ", ".join(recipients)
+        return JsonResponse({'status': 'success', 'message': f'Report email sent to {recipient_display}'})
     else:
         return JsonResponse({'status': 'error', 'message': 'Failed to send report email'})
 
@@ -322,7 +337,7 @@ def get_daily_outreach_data(patient_ids=None):
         'site_url': settings.SITE_URL,
     }
 
-def send_daily_summary_report(recipient_list=None, patient_ids=None):
+def send_daily_summary_report(recipient_list=None, patient_ids=None, cc_list=None, bcc_list=None):
     """Send the daily CEO summary report."""
     print(f"Preparing summary report (Patient IDs: {patient_ids})...")
     if not recipient_list:
@@ -345,7 +360,9 @@ def send_daily_summary_report(recipient_list=None, patient_ids=None):
             subject=subject,
             body=html_content,
             from_email=formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL)),
-            to=recipient_list
+            to=recipient_list,
+            cc=cc_list,
+            bcc=bcc_list
         )
         email.content_subtype = "html"
         email.send(fail_silently=False)
@@ -357,11 +374,24 @@ def send_daily_summary_report(recipient_list=None, patient_ids=None):
 
 def email_daily_summary_trigger(request):
     """View trigger to manually test the daily summary report."""
-    recipient = request.GET.get('email', "bijoy@sivasolutions.com")
-    success = send_daily_summary_report([recipient])
+    
+    # Helper to parse multiple emails from comma-separated string
+    def parse_emails(email_str):
+        if not email_str:
+            return []
+        return [e.strip() for e in email_str.split(',') if e.strip()]
+
+    recipients = parse_emails(request.GET.get('email', "bijoy@sivasolutions.com"))
+    cc_list = parse_emails(request.GET.get('cc', ''))
+    bcc_list = parse_emails(request.GET.get('bcc', ''))
+
+    if not recipients:
+        recipients = ["bijoy@sivasolutions.com"]
+
+    success = send_daily_summary_report(recipients, cc_list=cc_list, bcc_list=bcc_list)
     
     if success:
-        return JsonResponse({'status': 'success', 'message': f'Daily summary sent to {recipient}'})
+        return JsonResponse({'status': 'success', 'message': f'Daily summary sent to {", ".join(recipients)}'})
     else:
         # Check if they want to send it even if empty
         force = request.GET.get('force') == 'true'
@@ -371,13 +401,15 @@ def email_daily_summary_trigger(request):
             html_content = render_to_string(template, context)
             subject = f"Daily Outreach Summary (Manual) - {context['date'].strftime('%b %d, %Y')}"
             email = EmailMessage(
-                subject,
-                html_content,
-                formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL)),
-                [recipient]
+                subject=subject,
+                body=html_content,
+                from_email=formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL)),
+                to=recipients,
+                cc=cc_list,
+                bcc=bcc_list
             )
             email.content_subtype = "html"
             email.send()
-            return JsonResponse({'status': 'success', 'message': f'Forced daily summary sent to {recipient}'})
+            return JsonResponse({'status': 'success', 'message': f'Forced daily summary sent to {", ".join(recipients)}'})
         
         return JsonResponse({'status': 'error', 'message': 'No activity today to report. Use force=true to send anyway.'})
