@@ -3,11 +3,16 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from datetime import timedelta, datetime, date
 from django.http import HttpResponse, JsonResponse
-from .models import PatientStatus, ScheduledWish, Patient
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST
+from django.conf import settings
+from django.core.mail import get_connection, EmailMessage
+from email.utils import formataddr
+
+from .models import PatientStatus, ScheduledWish, Patient
 from xhtml2pdf import pisa
 import io
+import os
 
 def report_dashboard(request):
     """View to show the report selection page."""
@@ -208,10 +213,32 @@ def generate_report(request):
     
     return render(request, 'birthday/reports/report_view.html', context)
 
-from django.core.mail import EmailMessage
-from django.conf import settings
-from email.utils import formataddr
+def get_report_email_connection():
+    """
+    Creates and returns an email connection using report-specific SMTP settings from .env.
+    Falls back to default Django settings if a specific host is not provided.
+    """
+    host = os.getenv('REPORT_EMAIL_HOST')
+    if not host:
+        # If no specific report host, use the default connection from settings.
+        # This will use EMAIL_BACKEND and its settings.
+        return get_connection(fail_silently=False)
 
+    port = int(os.getenv('REPORT_EMAIL_PORT', 587))
+    use_tls = os.getenv('REPORT_EMAIL_USE_TLS', 'True').lower() in ('true', '1', 't')
+    username = os.getenv('REPORT_EMAIL_HOST_USER')
+    password = os.getenv('REPORT_EMAIL_HOST_PASSWORD')
+
+    # When using a specific host, we assume SMTP backend.
+    return get_connection(
+        backend='django.core.mail.backends.smtp.EmailBackend',
+        host=host,
+        port=port,
+        username=username,
+        password=password,
+        use_tls=use_tls,
+        fail_silently=False,
+    )
 def send_report_email(period='weekly', report_type='birthday', recipient_list=None, cc_list=None, bcc_list=None):
     """Function to send the report as an HTML email."""
     if not recipient_list:
@@ -228,13 +255,19 @@ def send_report_email(period='weekly', report_type='birthday', recipient_list=No
     html_content = render_to_string(template, context)
     subject = f"{context['title']} - {context['generated_at'].strftime('%b %d, %Y')}"
     
+    # Use report-specific settings, falling back to defaults
+    report_from_name = os.getenv('REPORT_EMAIL_FROM_NAME', settings.EMAIL_FROM_NAME)
+    report_from_email = os.getenv('REPORT_DEFAULT_FROM_EMAIL', settings.DEFAULT_FROM_EMAIL)
+    connection = get_report_email_connection()
+
     email = EmailMessage(
         subject=subject,
         body=html_content,
-        from_email=formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL)),
+        from_email=formataddr((report_from_name, report_from_email)),
         to=recipient_list,
         cc=cc_list,
-        bcc=bcc_list
+        bcc=bcc_list,
+        connection=connection
     )
     email.content_subtype = "html"
     email.send()
@@ -355,14 +388,20 @@ def send_daily_summary_report(recipient_list=None, patient_ids=None, cc_list=Non
         html_content = render_to_string(template, context)
         
         subject = f"Daily Outreach Summary - {context['date'].strftime('%b %d, %Y')}"
-        
+
+        # Use report-specific settings, falling back to defaults
+        report_from_name = os.getenv('REPORT_EMAIL_FROM_NAME', settings.EMAIL_FROM_NAME)
+        report_from_email = os.getenv('REPORT_DEFAULT_FROM_EMAIL', settings.DEFAULT_FROM_EMAIL)
+        connection = get_report_email_connection()
+
         email = EmailMessage(
             subject=subject,
             body=html_content,
-            from_email=formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL)),
+            from_email=formataddr((report_from_name, report_from_email)),
             to=recipient_list,
             cc=cc_list,
-            bcc=bcc_list
+            bcc=bcc_list,
+            connection=connection
         )
         email.content_subtype = "html"
         email.send(fail_silently=False)
@@ -400,13 +439,20 @@ def email_daily_summary_trigger(request):
             template = 'birthday/emails/daily_summary_email.html'
             html_content = render_to_string(template, context)
             subject = f"Daily Outreach Summary (Manual) - {context['date'].strftime('%b %d, %Y')}"
+
+            # Use report-specific settings, falling back to defaults
+            report_from_name = os.getenv('REPORT_EMAIL_FROM_NAME', settings.EMAIL_FROM_NAME)
+            report_from_email = os.getenv('REPORT_DEFAULT_FROM_EMAIL', settings.DEFAULT_FROM_EMAIL)
+            connection = get_report_email_connection()
+
             email = EmailMessage(
                 subject=subject,
                 body=html_content,
-                from_email=formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL)),
+                from_email=formataddr((report_from_name, report_from_email)),
                 to=recipients,
                 cc=cc_list,
-                bcc=bcc_list
+                bcc=bcc_list,
+                connection=connection
             )
             email.content_subtype = "html"
             email.send()
