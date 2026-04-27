@@ -1,0 +1,368 @@
+{% extends 'base.html' %}
+
+{% block title %}Daily Report API Docs | Proceed{% endblock %}
+
+{% block extra_css %}
+<style>
+    .docs-hero {
+        background:
+            radial-gradient(circle at top right, rgba(34, 211, 238, 0.18), transparent 30%),
+            linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.78));
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 24px;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .docs-hero::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(34, 211, 238, 0.08), transparent 45%);
+        pointer-events: none;
+    }
+
+    .docs-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.45rem 0.8rem;
+        border-radius: 999px;
+        background: rgba(34, 211, 238, 0.12);
+        border: 1px solid rgba(34, 211, 238, 0.25);
+        color: #67e8f9;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    .docs-section {
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 18px;
+        background: rgba(15, 23, 42, 0.55);
+        backdrop-filter: blur(10px);
+    }
+
+    .docs-section-header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .docs-label {
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
+
+    .docs-value {
+        color: #f8fafc;
+        font-weight: 600;
+        word-break: break-word;
+    }
+
+    .docs-code {
+        margin: 0;
+        padding: 1rem 1.1rem;
+        border-radius: 14px;
+        background: #020617;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        color: #cbd5e1;
+        font-size: 0.92rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .docs-table thead th {
+        color: #67e8f9;
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        border-bottom-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .docs-table td {
+        color: #e2e8f0;
+        border-bottom-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .endpoint-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.8rem 1rem;
+        border-radius: 16px;
+        background: rgba(2, 6, 23, 0.78);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .method-pill {
+        padding: 0.35rem 0.7rem;
+        border-radius: 999px;
+        background: rgba(34, 197, 94, 0.16);
+        color: #86efac;
+        font-weight: 700;
+        font-size: 0.78rem;
+        letter-spacing: 0.08em;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <a href="{% url 'report_dashboard' %}" class="btn btn-sm btn-outline-light border-opacity-25 mb-3">
+            <i class="bi bi-arrow-left me-1"></i> Back to Reports
+        </a>
+    </div>
+</div>
+
+<div class="docs-hero p-4 p-lg-5 mb-4">
+    <div class="row align-items-center g-4">
+        <div class="col-lg-8">
+            <span class="docs-badge mb-3"><i class="bi bi-broadcast-pin"></i> Daily Report API</span>
+            <h1 class="display-6 fw-bold text-white mb-3">Integration details for your external report collector</h1>
+            <p class="text-white-50 mb-4" style="max-width: 760px;">
+                This endpoint returns the daily outreach report in JSON format so another application can collect
+                sent email activity, SMS activity, failures, and per-patient details.
+            </p>
+            <div class="endpoint-chip">
+                <span class="method-pill">GET</span>
+                <span class="text-white">{{ api_url }}</span>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="docs-section p-4 h-100">
+                <div class="docs-label mb-2">Access Notes</div>
+                <div class="text-white-50 small mb-3">Authentication is required on every request.</div>
+                <div class="docs-value mb-2">Headers supported</div>
+                <div class="text-white-50 small">`Authorization: Bearer &lt;token&gt;`</div>
+                <div class="text-white-50 small">`X-API-Key: &lt;token&gt;`</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="docs-section h-100">
+            <div class="docs-section-header">
+                <h5 class="mb-1 fw-bold text-white">Endpoint</h5>
+                <div class="text-white-50 small">Basic request contract</div>
+            </div>
+            <div class="p-4">
+                <div class="row g-3 mb-4">
+                    <div class="col-sm-4">
+                        <div class="docs-label">Method</div>
+                        <div class="docs-value">GET</div>
+                    </div>
+                    <div class="col-sm-8">
+                        <div class="docs-label">Path</div>
+                        <div class="docs-value">{{ api_path }}</div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="docs-label">Response</div>
+                        <div class="docs-value">JSON</div>
+                    </div>
+                    <div class="col-sm-8">
+                        <div class="docs-label">Auth</div>
+                        <div class="docs-value">Bearer token or X-API-Key</div>
+                    </div>
+                </div>
+
+                <h6 class="fw-bold text-white mb-3">Query Parameters</h6>
+                <div class="table-responsive">
+                    <table class="table docs-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Required</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>date</code></td>
+                                <td>No</td>
+                                <td>Report date in <code>YYYY-MM-DD</code> format. Defaults to today.</td>
+                            </tr>
+                            <tr>
+                                <td><code>patient_ids</code></td>
+                                <td>No</td>
+                                <td>Comma-separated patient IDs to restrict the report, for example <code>1,2,3</code>.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="docs-section h-100">
+            <div class="docs-section-header">
+                <h5 class="mb-1 fw-bold text-white">Authentication</h5>
+                <div class="text-white-50 small">Server-side token configuration</div>
+            </div>
+            <div class="p-4">
+                <p class="text-white-50 mb-3">
+                    Configure one of these environment variables on the Django app server:
+                </p>
+                <pre class="docs-code">REPORT_API_TOKEN=your-secret-token
+DAILY_REPORT_API_TOKEN=your-secret-token</pre>
+                <p class="text-white-50 small mt-3 mb-0">
+                    The endpoint accepts either variable. If both exist, <code>REPORT_API_TOKEN</code> is used first.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="docs-section">
+            <div class="docs-section-header">
+                <h5 class="mb-1 fw-bold text-white">Request Examples</h5>
+                <div class="text-white-50 small">Ready-to-use examples for your second app</div>
+            </div>
+            <div class="p-4">
+                <div class="row g-4">
+                    <div class="col-xl-6">
+                        <div class="docs-label mb-2">Get today's report</div>
+                        <pre class="docs-code">curl -H "X-API-Key: your-secret-token" "{{ api_url }}"</pre>
+                    </div>
+                    <div class="col-xl-6">
+                        <div class="docs-label mb-2">Get a report for a specific date</div>
+                        <pre class="docs-code">curl -H "Authorization: Bearer your-secret-token" "{{ api_url }}?date={{ sample_date }}"</pre>
+                    </div>
+                    <div class="col-12">
+                        <div class="docs-label mb-2">Get a filtered report for selected patients</div>
+                        <pre class="docs-code">curl -H "X-API-Key: your-secret-token" "{{ api_url }}?date={{ sample_date }}&patient_ids=12,18,44"</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="docs-section">
+            <div class="docs-section-header">
+                <h5 class="mb-1 fw-bold text-white">Success Response Example</h5>
+                <div class="text-white-50 small">Main fields returned by the API</div>
+            </div>
+            <div class="p-4">
+                <pre class="docs-code">{
+  "status": "success",
+  "report": {
+    "date": "{{ sample_date }}",
+    "site_url": "http://192.168.0.107:8002",
+    "summary": {
+      "total_sent": 5,
+      "total_failed": 1,
+      "emails_count": 3,
+      "sms_count": 2,
+      "birthdays_total": 2,
+      "birthdays_wished": 1,
+      "birthdays_unwished": 1
+    },
+    "birthdays": {
+      "total": 2,
+      "wished": 1,
+      "unwished": 1,
+      "details": [
+        {
+          "id": 12,
+          "first_name": "John",
+          "last_name": "Doe",
+          "email": "john@example.com",
+          "phone": "5551234567",
+          "practice": "Main Practice",
+          "patient_type": "Regular",
+          "membership_plan": null,
+          "age_turning": 31,
+          "is_wished_today": true,
+          "has_sent_activity_today": true,
+          "has_sent_wish_today": false,
+          "has_pending_wish": false
+        }
+      ]
+    },
+    "activities": [
+      {
+        "id": 101,
+        "activity_type": "Email Sent",
+        "description": "Birthday email sent",
+        "full_content": "Happy Birthday",
+        "created_at": "{{ sample_date }}T10:30:00-07:00",
+        "patient": {
+          "id": 12,
+          "first_name": "John",
+          "last_name": "Doe",
+          "email": "john@example.com",
+          "phone": "5551234567",
+          "practice": "Main Practice"
+        }
+      }
+    ],
+    "failures": [
+      {
+        "id": 202,
+        "channel": "SMS",
+        "status": "Failed",
+        "scheduled_for": "{{ sample_date }}T09:00:00-07:00",
+        "updated_at": "{{ sample_date }}T09:01:00-07:00",
+        "error_message": "Twilio delivery failed",
+        "patient": {
+          "id": 18,
+          "first_name": "Jane",
+          "last_name": "Smith",
+          "email": "jane@example.com",
+          "phone": "5554442222",
+          "practice": "Downtown"
+        }
+      }
+    ]
+  }
+}</pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="docs-section h-100">
+            <div class="docs-section-header">
+                <h5 class="mb-1 fw-bold text-white">Error Responses</h5>
+                <div class="text-white-50 small">Common integration failures</div>
+            </div>
+            <div class="p-4">
+                <div class="docs-label mb-2">401 Unauthorized</div>
+                <pre class="docs-code">{"status":"error","message":"Unauthorized daily report request."}</pre>
+                <div class="docs-label mt-4 mb-2">400 Invalid Date</div>
+                <pre class="docs-code">{"status":"error","message":"Invalid date. Use YYYY-MM-DD."}</pre>
+                <div class="docs-label mt-4 mb-2">503 Missing Server Token</div>
+                <pre class="docs-code">{"status":"error","message":"Daily report API token is not configured."}</pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="docs-section h-100">
+            <div class="docs-section-header">
+                <h5 class="mb-1 fw-bold text-white">Field Notes</h5>
+                <div class="text-white-50 small">What the consuming app should expect</div>
+            </div>
+            <div class="p-4">
+                <ul class="list-unstyled text-white-50 mb-0">
+                    <li class="mb-3"><strong class="text-white">birthdays_total</strong>, <strong class="text-white">birthdays_wished</strong>, and <strong class="text-white">birthdays_unwished</strong> give the exact birthday counts for the selected day.</li>
+                    <li class="mb-3"><strong class="text-white">birthdays.details</strong> returns the full patient list for birthdays on that date, including whether each patient was already wished.</li>
+                    <li class="mb-3"><strong class="text-white">activities</strong> only includes <code>Email Sent</code> and <code>SMS Sent</code> entries for the selected day.</li>
+                    <li class="mb-3"><strong class="text-white">failures</strong> includes scheduled wishes with status <code>Failed</code> updated on the selected day.</li>
+                    <li class="mb-3"><strong class="text-white">created_at</strong>, <strong class="text-white">scheduled_for</strong>, and <strong class="text-white">updated_at</strong> are ISO-8601 timestamps.</li>
+                    <li class="mb-0"><strong class="text-white">practice</strong> may be <code>null</code> when a patient is not linked to a practice.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

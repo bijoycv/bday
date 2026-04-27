@@ -1,10 +1,11 @@
 from django.shortcuts import render, get_object_or_404
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
 from datetime import timedelta, datetime, date
 from django.http import HttpResponse, JsonResponse
 from django.template.loader import render_to_string
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
+from django.urls import reverse
 from django.conf import settings
 from django.core.mail import get_connection, EmailMessage
 from email.utils import formataddr
@@ -17,6 +18,20 @@ import os
 def report_dashboard(request):
     """View to show the report selection page."""
     return render(request, 'birthday/reports/dashboard.html')
+
+
+def daily_report_api_docs(request):
+    """Human-readable API documentation page for the daily report endpoint."""
+    api_path = reverse('daily_report_api')
+    api_url = request.build_absolute_uri(api_path)
+
+    context = {
+        'api_url': api_url,
+        'api_path': api_path,
+        'docs_generated_at': timezone.now(),
+        'sample_date': timezone.localdate().isoformat(),
+    }
+    return render(request, 'birthday/reports/api_docs.html', context)
 
 def get_report_data(period='weekly'):
     """Helper function to calculate report data for a given period."""
@@ -325,42 +340,46 @@ def mark_outreach_status(request):
             
     return JsonResponse({'status': 'success'})
 
-def get_daily_outreach_data(patient_ids=None):
-    """Get metrics and activities for today's outreach or specific IDs."""
-    today = timezone.localdate()
-    
-    start_of_day = timezone.make_aware(datetime.combine(today, datetime.min.time()))
-    
+def get_daily_outreach_data(patient_ids=None, target_date=None):
+    """Get metrics and activities for a specific day or today's outreach."""
+    report_date = target_date or timezone.localdate()
+    start_of_day = timezone.make_aware(datetime.combine(report_date, datetime.min.time()))
+    end_of_day = start_of_day + timedelta(days=1)
+
     if patient_ids:
-        # Focus specifically on the patients just processed, but only for today
+        # Focus specifically on the patients just processed for the requested date
         activities = PatientStatus.objects.filter(
             activity_type__in=['Email Sent', 'SMS Sent'],
             patient_id__in=patient_ids,
-            created_at__gte=start_of_day
+            created_at__gte=start_of_day,
+            created_at__lt=end_of_day,
         ).order_by('-created_at').select_related('patient')
         
         failures = ScheduledWish.objects.filter(
             status='Failed',
             patient_id__in=patient_ids,
-            updated_at__gte=start_of_day
+            updated_at__gte=start_of_day,
+            updated_at__lt=end_of_day,
         ).order_by('-updated_at').select_related('patient')
     else:
-        # Fallback to today's activity
+        # Fallback to all activity for the requested date
         activities = PatientStatus.objects.filter(
             activity_type__in=['Email Sent', 'SMS Sent'],
-            created_at__gte=start_of_day
+            created_at__gte=start_of_day,
+            created_at__lt=end_of_day,
         ).order_by('-created_at').select_related('patient')
         
         failures = ScheduledWish.objects.filter(
             status='Failed',
-            updated_at__gte=start_of_day
+            updated_at__gte=start_of_day,
+            updated_at__lt=end_of_day,
         ).order_by('-updated_at').select_related('patient')
     
     emails_count = activities.filter(activity_type='Email Sent').count()
     sms_count = activities.filter(activity_type='SMS Sent').count()
     
     return {
-        'date': today,
+        'date': report_date,
         'activities': list(activities), # Convert to list for template stability
         'failures': list(failures),     # Convert to list for template stability
         'total_sent': activities.count(),
@@ -369,6 +388,204 @@ def get_daily_outreach_data(patient_ids=None):
         'sms_count': sms_count,
         'site_url': settings.SITE_URL,
     }
+
+
+def get_daily_birthday_data(target_date=None):
+    """Get birthday totals and patient-level wish status for a specific day."""
+    report_date = target_date or timezone.localdate()
+    start_of_day = timezone.make_aware(datetime.combine(report_date, datetime.min.time()))
+    end_of_day = start_of_day + timedelta(days=1)
+
+    sent_activity_today_qs = PatientStatus.objects.filter(
+        patient_id=OuterRef('pk'),
+        activity_type__in=['Email Sent', 'SMS Sent'],
+        created_at__gte=start_of_day,
+        created_at__lt=end_of_day,
+    )
+    sent_wish_today_qs = ScheduledWish.objects.filter(
+        patient_id=OuterRef('pk'),
+        status='Sent',
+        sent_at__gte=start_of_day,
+        sent_at__lt=end_of_day,
+    )
+    pending_wish_qs = ScheduledWish.objects.filter(
+        patient_id=OuterRef('pk'),
+        status='Pending',
+    )
+
+    patients = list(
+        Patient.objects.filter(
+            dob__month=report_date.month,
+            dob__day=report_date.day,
+        ).annotate(
+            has_sent_activity_today=Exists(sent_activity_today_qs),
+            has_sent_wish_today=Exists(sent_wish_today_qs),
+            has_pending_wish=Exists(pending_wish_qs),
+        ).select_related('practice').order_by('first_name', 'last_name')
+    )
+
+    wished_count = 0
+    for patient in patients:
+        patient.age_turning = report_date.year - patient.dob.year
+        patient.is_wished_today = patient.has_sent_activity_today or patient.has_sent_wish_today
+        if patient.is_wished_today:
+            wished_count += 1
+
+    return {
+        'date': report_date,
+        'total_birthdays': len(patients),
+        'wished_count': wished_count,
+        'unwished_count': len(patients) - wished_count,
+        'patients': patients,
+    }
+
+
+def _get_report_api_token():
+    return os.getenv('REPORT_API_TOKEN') or os.getenv('DAILY_REPORT_API_TOKEN')
+
+
+def _is_report_api_authorized(request):
+    expected_token = _get_report_api_token()
+    if not expected_token:
+        return False, JsonResponse(
+            {'status': 'error', 'message': 'Daily report API token is not configured.'},
+            status=503
+        )
+
+    auth_header = request.headers.get('Authorization', '')
+    api_key = request.headers.get('X-API-Key', '')
+    provided_token = ''
+
+    if auth_header.startswith('Bearer '):
+        provided_token = auth_header[7:].strip()
+    elif api_key:
+        provided_token = api_key.strip()
+
+    if provided_token != expected_token:
+        return False, JsonResponse(
+            {'status': 'error', 'message': 'Unauthorized daily report request.'},
+            status=401
+        )
+
+    return True, None
+
+
+def _serialize_daily_outreach_data(context):
+    birthday_context = get_daily_birthday_data(context['date'])
+
+    return {
+        'status': 'success',
+        'report': {
+            'date': context['date'].isoformat(),
+            'site_url': context['site_url'],
+            'summary': {
+                'total_sent': context['total_sent'],
+                'total_failed': context['total_failed'],
+                'emails_count': context['emails_count'],
+                'sms_count': context['sms_count'],
+                'birthdays_total': birthday_context['total_birthdays'],
+                'birthdays_wished': birthday_context['wished_count'],
+                'birthdays_unwished': birthday_context['unwished_count'],
+            },
+            'birthdays': {
+                'total': birthday_context['total_birthdays'],
+                'wished': birthday_context['wished_count'],
+                'unwished': birthday_context['unwished_count'],
+                'details': [
+                    {
+                        'id': patient.id,
+                        'first_name': patient.first_name,
+                        'last_name': patient.last_name,
+                        'email': patient.email,
+                        'phone': patient.phone,
+                        'practice': patient.practice.name if patient.practice else None,
+                        'patient_type': patient.patient_type,
+                        'membership_plan': patient.membership_plan,
+                        'age_turning': patient.age_turning,
+                        'is_wished_today': patient.is_wished_today,
+                        'has_sent_activity_today': patient.has_sent_activity_today,
+                        'has_sent_wish_today': patient.has_sent_wish_today,
+                        'has_pending_wish': patient.has_pending_wish,
+                    }
+                    for patient in birthday_context['patients']
+                ],
+            },
+            'activities': [
+                {
+                    'id': activity.id,
+                    'activity_type': activity.activity_type,
+                    'description': activity.description,
+                    'full_content': activity.full_content,
+                    'created_at': timezone.localtime(activity.created_at).isoformat(),
+                    'patient': {
+                        'id': activity.patient_id,
+                        'first_name': activity.patient.first_name,
+                        'last_name': activity.patient.last_name,
+                        'email': activity.patient.email,
+                        'phone': activity.patient.phone,
+                        'practice': activity.patient.practice.name if activity.patient.practice else None,
+                    },
+                }
+                for activity in context['activities']
+            ],
+            'failures': [
+                {
+                    'id': failure.id,
+                    'channel': failure.channel,
+                    'status': failure.status,
+                    'scheduled_for': timezone.localtime(failure.scheduled_for).isoformat(),
+                    'updated_at': timezone.localtime(failure.updated_at).isoformat(),
+                    'error_message': failure.error_message,
+                    'patient': {
+                        'id': failure.patient_id,
+                        'first_name': failure.patient.first_name,
+                        'last_name': failure.patient.last_name,
+                        'email': failure.patient.email,
+                        'phone': failure.patient.phone,
+                        'practice': failure.patient.practice.name if failure.patient.practice else None,
+                    },
+                }
+                for failure in context['failures']
+            ],
+        },
+    }
+
+
+@require_GET
+def daily_report_api(request):
+    """Token-protected JSON API for another app to fetch the daily report."""
+    is_authorized, error_response = _is_report_api_authorized(request)
+    if not is_authorized:
+        return error_response
+
+    report_date = timezone.localdate()
+    date_param = request.GET.get('date')
+    if date_param:
+        try:
+            report_date = date.fromisoformat(date_param)
+        except ValueError:
+            return JsonResponse(
+                {'status': 'error', 'message': 'Invalid date. Use YYYY-MM-DD.'},
+                status=400
+            )
+
+    patient_ids = None
+    patient_ids_param = request.GET.get('patient_ids', '').strip()
+    if patient_ids_param:
+        try:
+            patient_ids = [
+                int(patient_id.strip())
+                for patient_id in patient_ids_param.split(',')
+                if patient_id.strip()
+            ]
+        except ValueError:
+            return JsonResponse(
+                {'status': 'error', 'message': 'Invalid patient_ids. Use comma-separated integers.'},
+                status=400
+            )
+
+    context = get_daily_outreach_data(patient_ids=patient_ids, target_date=report_date)
+    return JsonResponse(_serialize_daily_outreach_data(context))
 
 def send_daily_summary_report(recipient_list=None, patient_ids=None, cc_list=None, bcc_list=None):
     """Send the daily CEO summary report."""

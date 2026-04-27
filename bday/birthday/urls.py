@@ -45,10 +45,12 @@ urlpatterns = [
 
     # Reports
     path('reports/', reports.report_dashboard, name='report_dashboard'),
+    path('reports/api-docs/', reports.daily_report_api_docs, name='daily_report_api_docs'),
     path('reports/generate/', reports.generate_report, name='generate_report'),
     path('reports/mark-outreach/', reports.mark_outreach_status, name='mark_outreach_status'),
     path('reports/email/', reports.email_report_trigger, name='email_report_trigger'),
     path('reports/daily-summary/', reports.email_daily_summary_trigger, name='email_daily_summary_trigger'),
+    path('api/reports/daily/', reports.daily_report_api, name='daily_report_api'),
     path('scheduled/update-ajax/<int:pk>/', views.scheduled_update_ajax, name='scheduled_update_ajax'),
 
     # SMO Sync
