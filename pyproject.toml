@@ -12,6 +12,6 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "pytz>=2025.2",
     "redis>=7.1.0",
-    "twilio>=9.10.0",
+    "signalwire-sdk>=3.0.2",
     "xhtml2pdf>=0.2.17",
 ]

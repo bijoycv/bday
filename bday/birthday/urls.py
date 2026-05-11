@@ -90,5 +90,5 @@ urlpatterns = [
     path('communications/', views.communication_log_list, name='communication_log_list'),
     path('messages/', views.messages_hub, name='messages_hub'),
     path('messages/send/', views.send_direct_sms, name='send_direct_sms'),
-    path('messages/twilio/webhook/', views.twilio_sms_webhook, name='twilio_sms_webhook'),
+    path('messages/signalwire/webhook/', views.signalwire_sms_webhook, name='signalwire_sms_webhook'),
 ]

@@ -472,7 +472,7 @@ class CommunicationLog(models.Model):
     body = models.TextField()
     recipient = models.CharField(max_length=200)  # Email or phone number
     external_message_id = models.CharField(max_length=100, blank=True, null=True)
-    gateway_number = models.CharField(max_length=30, blank=True, null=True, help_text="Twilio number used for this SMS")
+    gateway_number = models.CharField(max_length=30, blank=True, null=True, help_text="SignalWire number used for this SMS")
     
     sent_at = models.DateTimeField(blank=True, null=True)
     error_message = models.TextField(blank=True, null=True)

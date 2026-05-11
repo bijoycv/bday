@@ -135,15 +135,15 @@
 <div class="d-flex justify-content-between align-items-start mb-3">
     <div>
         <h2 class="fw-bold mb-1">Messages Command Center</h2>
-        <p class="text-white-50 mb-0">Live Twilio stream, patient conversations, and direct send.</p>
+        <p class="text-white-50 mb-0">Live SignalWire stream, patient conversations, and direct send.</p>
     </div>
     <div class="d-flex align-items-center gap-2">
         <button type="button" class="btn btn-new-msg" data-bs-toggle="modal" data-bs-target="#newMessageModal">
             <i class="bi bi-plus-lg me-2"></i>New Message
         </button>
         <div class="msg-panel px-3 py-2 small">
-            <span class="text-white-50">Twilio Number:</span>
-            <span class="fw-bold text-info ms-2">{{ twilio_number|default:"Not configured" }}</span>
+            <span class="text-white-50">SignalWire Number:</span>
+            <span class="fw-bold text-info ms-2">{{ signalwire_number|default:"Not configured" }}</span>
         </div>
     </div>
 </div>
@@ -242,13 +242,13 @@
 
         <div class="msg-panel p-3">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="text-uppercase text-white-50 small mb-0">Recent Twilio Feed</h6>
-                <span class="text-white-50 small">Latest {{ twilio_feed|length }} records</span>
+                <h6 class="text-uppercase text-white-50 small mb-0">Recent SignalWire Feed</h6>
+                <span class="text-white-50 small">Latest {{ signalwire_feed|length }} records</span>
             </div>
 
-            {% if twilio_fetch_error %}
+            {% if signalwire_fetch_error %}
             <div class="alert alert-warning py-2 px-3 mb-3">
-                <i class="bi bi-exclamation-triangle me-2"></i>{{ twilio_fetch_error }}
+                <i class="bi bi-exclamation-triangle me-2"></i>{{ signalwire_fetch_error }}
             </div>
             {% endif %}
 
@@ -264,7 +264,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for row in twilio_feed %}
+                        {% for row in signalwire_feed %}
                         <tr>
                             <td>{{ row.created_at|date:"Y-m-d H:i:s" }}</td>
                             <td>{{ row.from_number }}</td>
@@ -278,7 +278,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center text-white-50 py-4">No Twilio messages found.</td>
+                            <td colspan="5" class="text-center text-white-50 py-4">No SignalWire messages found.</td>
                         </tr>
                         {% endfor %}
                     </tbody>

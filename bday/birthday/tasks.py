@@ -82,7 +82,7 @@ def send_scheduled_wishes_task():
             body = body.replace('{first_name}', patient.first_name).replace('{last_name}', patient.last_name)
 
             if channel == 'SMS':
-                print(f"ACTION [v1.1.0]: ROUTING TO TWILIO SMS ENGINE")
+                print(f"ACTION [v1.1.0]: ROUTING TO SIGNALWIRE SMS ENGINE")
                 if not patient.phone:
                     raise ValueError("Patient missing phone number for SMS")
 
@@ -122,7 +122,7 @@ def send_scheduled_wishes_task():
                     sent_count += 1
                     print(f"RESULT: SMS SUCCESS (SID: {result})")
                 else:
-                    raise Exception(f"Twilio Error: {result}")
+                    raise Exception(f"SignalWire Error: {result}")
             
             elif channel == 'Email':
                 print(f"ACTION [v1.1.0]: ROUTING TO DJANGO EMAIL ENGINE")

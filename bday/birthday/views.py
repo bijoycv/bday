@@ -2124,7 +2124,7 @@ def communication_log_list(request):
 
 
 def _to_e164(number):
-    """Normalize phone numbers for Twilio comparisons (+1XXXXXXXXXX)."""
+    """Normalize phone numbers for comparisons (+1XXXXXXXXXX)."""
     if not number:
         return ''
     raw = str(number).strip()
@@ -2136,46 +2136,11 @@ def _to_e164(number):
     return raw if raw.startswith('+') else f'+{digits}' if digits else raw
 
 
-def _fetch_twilio_sms_feed(limit=120):
-    """
-    Fetch recent Twilio SMS messages (both sent and received) for UI display.
-    Returns (messages, error_text).
-    """
-    account_sid = os.getenv('TWILIO_ACCOUNT_SID')
-    auth_token = os.getenv('TWILIO_AUTH_TOKEN')
-    twilio_number = _to_e164(os.getenv('TWILIO_PHONE_NUMBER', ''))
-    if not account_sid or not auth_token or not twilio_number:
-        return [], 'Twilio credentials or number are missing in .env'
-
-    try:
-        from twilio.rest import Client
-        client = Client(account_sid, auth_token)
-
-        inbound = client.messages.list(to=twilio_number, limit=limit)
-        outbound = client.messages.list(from_=twilio_number, limit=limit)
-
-        merged = {}
-        for msg in list(inbound) + list(outbound):
-            sid = getattr(msg, 'sid', None) or f"tmp-{id(msg)}"
-            msg_from = _to_e164(getattr(msg, 'from_', ''))
-            msg_to = _to_e164(getattr(msg, 'to', ''))
-            direction = 'Outbound' if msg_from == twilio_number else 'Inbound'
-            created_at = getattr(msg, 'date_sent', None) or getattr(msg, 'date_created', None) or timezone.now()
-            merged[sid] = {
-                'sid': sid,
-                'from_number': msg_from,
-                'to_number': msg_to,
-                'direction': direction,
-                'status': (getattr(msg, 'status', '') or '').title(),
-                'body': getattr(msg, 'body', '') or '',
-                'created_at': created_at,
-                'gateway_number': twilio_number,
-            }
-
-        feed = sorted(merged.values(), key=lambda x: x['created_at'], reverse=True)
-        return feed, None
-    except Exception as exc:
-        return [], f'Unable to fetch live Twilio feed: {exc}'
+def _fetch_signalwire_sms_feed(limit=120):
+    """Fetch recent SignalWire SMS messages for UI display via REST API."""
+    sw_number = _to_e164(os.getenv('TWILIO_PHONE_NUMBER', ''))
+    from .utils import fetch_signalwire_messages
+    return fetch_signalwire_messages(sw_number, limit=limit)
 
 
 def messages_hub(request):
@@ -2185,7 +2150,7 @@ def messages_hub(request):
         .select_related('patient')
         .order_by('-created_at')[:500]
     )
-    twilio_feed, twilio_fetch_error = _fetch_twilio_sms_feed(limit=120)
+    twilio_feed, twilio_fetch_error = _fetch_signalwire_sms_feed(limit=120)
 
     patient_by_phone = {}
     for patient in Patient.objects.exclude(phone__isnull=True).exclude(phone=''):
@@ -2316,7 +2281,7 @@ def messages_hub(request):
                 'created_at': item['created_at'],
                 'from_number': item['from_number'],
                 'to_number': item['to_number'],
-                'source': 'Twilio',
+                'source': 'SignalWire',
             })
 
         conversation.sort(key=lambda x: x['created_at'])
@@ -2338,7 +2303,7 @@ def messages_hub(request):
             if found_patient_for_lookup:
                 lookup_phone_normalized = _to_e164(found_patient_for_lookup.phone)
 
-    twilio_number = _to_e164(os.getenv('TWILIO_PHONE_NUMBER', ''))
+    sw_number = _to_e164(os.getenv('TWILIO_PHONE_NUMBER', ''))
     selectable_patients = Patient.objects.order_by('first_name', 'last_name')[:500]
 
     today = timezone.localdate()
@@ -2361,10 +2326,10 @@ def messages_hub(request):
         'selected_phone': selected_target_phone,
         'selected_thread_key': selected_thread_key,
         'conversation': conversation,
-        'twilio_number': twilio_number,
+        'signalwire_number': sw_number,
         'selectable_patients': selectable_patients,
-        'twilio_feed': twilio_feed[:40],
-        'twilio_fetch_error': twilio_fetch_error,
+        'signalwire_feed': twilio_feed[:40],
+        'signalwire_fetch_error': twilio_fetch_error,
         'sent_today': sent_today,
         'received_today': received_today,
         'delivered_today': delivered_today,
@@ -2449,10 +2414,10 @@ def send_direct_sms(request):
 
 
 @csrf_exempt
-def twilio_sms_webhook(request):
+def signalwire_sms_webhook(request):
     """
-    Twilio inbound webhook: records incoming SMS into CommunicationLog.
-    Configure this URL in Twilio for your messaging number.
+    SignalWire inbound webhook: records incoming SMS into CommunicationLog.
+    Configure this URL in your SignalWire dashboard for the messaging number.
     """
     if request.method != 'POST':
         return HttpResponse(status=405)
